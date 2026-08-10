@@ -70,7 +70,7 @@ public final class MediaProvider: SystemProvider {
     public let isAvailable = true
 
     private weak var store: ActivityStore?
-    private var timer: Timer?
+    private lazy var poller = PollTimer(interval: 1.0) { [weak self] in self?.tick() }
     private var pollTask: Task<Void, Never>?
     private var current: NowPlaying?
     private var artworkPath: String?
@@ -86,11 +86,7 @@ public final class MediaProvider: SystemProvider {
     public func start(store: ActivityStore) {
         self.store = store
 
-        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        poller.start()
         tick()
 
         actionObserver = NotificationCenter.default.addObserver(
@@ -104,8 +100,7 @@ public final class MediaProvider: SystemProvider {
     }
 
     public func stop() {
-        timer?.invalidate()
-        timer = nil
+        poller.stop()
         pollTask?.cancel()
         pollTask = nil
         if let actionObserver { NotificationCenter.default.removeObserver(actionObserver) }

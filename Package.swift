@@ -35,5 +35,6 @@ let package = Package(
         .executableTarget(name: "IsletCLI", dependencies: ["IsletCore"]),
 
         .testTarget(name: "IsletCoreTests", dependencies: ["IsletCore"]),
+        .testTarget(name: "IsletUITests", dependencies: ["IsletUI"]),
     ]
 )

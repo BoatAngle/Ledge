@@ -2,12 +2,6 @@ import AppKit
 import IsletCore
 import SwiftUI
 
-/// A hosting view that is transparent to clicks everywhere except the island.
-///
-/// The panel has to be large enough to hold the fully expanded island, but a
-/// 720×500 always-on-top window that swallowed clicks would make the top of the
-/// screen unusable. So the view reports "not me" for anything outside the
-/// island's current footprint, and the menu bar keeps working.
 /// Fills the panel and pins the island to the top edge.
 ///
 /// Without this the hosting view centres the island's intrinsic frame inside a
@@ -16,6 +10,7 @@ import SwiftUI
 struct IslandHostView: View {
     var store: ActivityStore
     var metrics: IslandMetrics
+    var shelf: DropShelf
     var onFootprintChange: (CGSize) -> Void
 
     var body: some View {
@@ -23,6 +18,7 @@ struct IslandHostView: View {
             IslandRootView(
                 store: store,
                 metrics: metrics,
+                shelf: shelf,
                 onFootprintChange: onFootprintChange
             )
             Spacer(minLength: 0)
@@ -31,21 +27,78 @@ struct IslandHostView: View {
     }
 }
 
+/// A hosting view that is transparent to clicks everywhere except the island,
+/// and the drag destination for files dropped on the notch.
+///
+/// The panel has to be large enough to hold the fully expanded island, but a
+/// 720×500 always-on-top window that swallowed clicks would make the top of the
+/// screen unusable. So the view reports "not me" for anything outside the
+/// island's current footprint, and the menu bar keeps working.
 final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     /// Current island footprint. Updated by the controller as the island grows.
     var footprint: CGSize = .zero
+    /// Used until SwiftUI reports a real footprint.
+    ///
+    /// Without it a zero footprint makes `hitTest` reject everything, and the
+    /// island goes completely inert — no hover, no clicks, no drops — with no
+    /// visible symptom. Falling back to the notch keeps it usable no matter how
+    /// the first layout pass is ordered.
+    var fallbackFootprint: CGSize = .zero
+
+    /// The shelf that receives files dropped on the island.
+    weak var shelf: DropShelf?
 
     /// Extra slack around the island so the cursor registers a hover just
-    /// before it touches the edge.
-    private let slop: CGFloat = 6
+    /// before it touches the edge — and, when idle, so the notch is a large
+    /// enough target to drag a file onto.
+    private let slop: CGFloat = 16
+
+    // MARK: Drag destination
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard !urls(from: sender).isEmpty else { return [] }
+        shelf?.dragEntered()
+        // `.copy` because the shelf only ever references files — it never
+        // moves or deletes what you drop on it.
+        return .copy
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard !urls(from: sender).isEmpty else { return [] }
+        shelf?.dragUpdated()
+        return .copy
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        shelf?.dragExited()
+    }
+
+    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        !urls(from: sender).isEmpty
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        let urls = urls(from: sender)
+        guard !urls.isEmpty else { return false }
+        shelf?.accept(urls)
+        return true
+    }
+
+    private func urls(from sender: any NSDraggingInfo) -> [URL] {
+        sender.draggingPasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL] ?? []
+    }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard footprint.width > 0, footprint.height > 0 else { return nil }
+        let active = footprint.width > 0 && footprint.height > 0 ? footprint : fallbackFootprint
+        guard active.width > 0, active.height > 0 else { return nil }
         let rect = CGRect(
-            x: (bounds.width - footprint.width) / 2 - slop,
-            y: bounds.height - footprint.height - slop,
-            width: footprint.width + slop * 2,
-            height: footprint.height + slop * 2
+            x: (bounds.width - active.width) / 2 - slop,
+            y: bounds.height - active.height - slop,
+            width: active.width + slop * 2,
+            height: active.height + slop * 2
         )
         guard rect.contains(point) else { return nil }
         return super.hitTest(point)
@@ -94,6 +147,7 @@ final class IslandPanel: NSPanel {
 public final class IslandWindowController {
     private var panel: IslandPanel?
     private var hostingView: PassthroughHostingView<IslandHostView>?
+    public let shelf = DropShelf()
     private var outsideClickMonitor: Any?
     private let store: ActivityStore
     private var metrics: IslandMetrics
@@ -110,12 +164,14 @@ public final class IslandWindowController {
 
     public func show() {
         guard panel == nil else { return }
+        shelf.attach(to: store)
         rebuild()
         observeScreenChanges()
         observeOutsideClicks()
     }
 
     public func hide() {
+        shelf.detach()
         panel?.orderOut(nil)
         panel = nil
         hostingView = nil
@@ -155,14 +211,30 @@ public final class IslandWindowController {
         panel.setFrame(frame, display: true)
 
         if let hostingView {
+            hostingView.fallbackFootprint = metrics.notchSize
             hostingView.rootView = makeRootView()
             hostingView.frame = CGRect(origin: .zero, size: panelSize)
         } else {
-            let view = PassthroughHostingView(rootView: makeRootView())
+            // The root view's footprint callback writes through `hostingView`,
+            // so that reference has to exist before SwiftUI's first layout pass
+            // can fire it. Build with an inert placeholder, publish the
+            // reference, then install the real root view.
+            let view = PassthroughHostingView(
+                rootView: IslandHostView(
+                    store: store,
+                    metrics: metrics,
+                    shelf: shelf,
+                    onFootprintChange: { _ in }
+                )
+            )
             view.frame = CGRect(origin: .zero, size: panelSize)
             view.autoresizingMask = [.width, .height]
+            view.shelf = shelf
+            view.fallbackFootprint = metrics.notchSize
+            view.registerForDraggedTypes([.fileURL])
             panel.contentView = view
             hostingView = view
+            view.rootView = makeRootView()
         }
 
         self.panel = panel
@@ -170,7 +242,7 @@ public final class IslandWindowController {
     }
 
     private func makeRootView() -> IslandHostView {
-        IslandHostView(store: store, metrics: metrics) { [weak self] footprint in
+        IslandHostView(store: store, metrics: metrics, shelf: shelf) { [weak self] footprint in
             self?.hostingView?.footprint = footprint
         }
     }

@@ -8,7 +8,7 @@ real time.
 
 ```bash
 make run     # compile + assemble Islet.app + relaunch
-make test    # 30 tests over IsletCore
+make test    # 43 tests over IsletCore and IsletUI
 make app     # bundle only
 make stop    # pkill
 ```
@@ -91,7 +91,10 @@ Deliberate, and worth preserving:
   Accessibility.
 - Privacy indicators query CoreAudio/CoreMediaIO for whether *someone else* is
   using the devices. Islet never opens the camera or mic.
-- Only the media module prompts for anything (Automation, for Music/Spotify).
+- Exactly three modules prompt, each independently declinable: Now Playing
+  (Automation), Calendar (read-only), Downloads (folder access).
+- No Full Disk Access. Downloads are read from the partial files in
+  `~/Downloads`, not from Safari's container.
 
 ## Private API
 
@@ -99,9 +102,51 @@ Exactly one: `DisplayServicesGetBrightness`, `dlopen`'d by name in
 `DisplayServicesBridge`. There is no public way to read display brightness. It is
 isolated to that file and fails to `isAvailable == false`. Keep it contained.
 
+## Deferred startup is mandatory
+
+Providers start inside a `Task` in `applicationDidFinishLaunching`, never inline.
+Several touch TCC-gated resources (Downloads, Calendar, Apple Events), and
+raising a consent prompt *during* launch deadlocks: the app hasn't finished
+launching, so the prompt can't be presented, so launch never finishes. It
+presents as a hang with no crash log, and running the binary from a terminal
+hides it completely because the process inherits the terminal's permissions.
+
+For the same reason `DownloadsProvider` opens `~/Downloads` on a background
+queue — the blocking `open()` would otherwise freeze the island, the menu bar
+item, and the API for as long as the dialog sits there — and `isAvailable` never
+stats the folder.
+
+## Two more traps
+
+**The socket unlink race.** On quit the server used to `unlink` the socket
+unconditionally. Relaunching overlaps the two processes, so the outgoing app
+would delete the *incoming* one's socket, leaving it listening on an unreachable
+inode: alive, but every client reports "Islet isn't running". `stop()` now
+compares the inode before unlinking.
+
+**The footprint race.** `PassthroughHostingView.hitTest` rejects everything when
+`footprint` is zero, which makes the island completely inert with no visible
+symptom. The root view's callback writes through `hostingView`, so that
+reference must be assigned *before* the real root view is installed — hence the
+placeholder-then-swap in `rebuild()`, plus `fallbackFootprint`.
+
+## Testing hover
+
+`CGWarpMouseCursorPosition` moves the pointer without posting an event, so
+tracking areas never fire and `.onHover` looks broken when it isn't. Post a real
+event instead:
+
+```swift
+CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
+        mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+```
+
+Dragging files *onto* the notch can't be scripted safely — it needs a real
+Finder drag. `islet shelf <files>` exercises the same shelf code and is tested.
+
 ## Not yet built
 
-Calendar, timers, AirDrop shelf, download tracking, lock-screen presence. The
-activity model already expresses all of them — each is a `SystemProvider`
-conformance plus a `NativeViewKind` case. Start from `BatteryProvider`, which is
-the simplest complete example.
+Weather, a settings window, and per-module customisation (colours, sizes,
+positions). Each new module is a `SystemProvider` conformance plus a
+`NativeViewKind` case; `BatteryProvider` is the simplest complete example, and
+`TimerProvider` shows the pattern for one that owns state and persists it.

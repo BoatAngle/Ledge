@@ -21,7 +21,7 @@ public final class FocusProvider: SystemProvider {
     private weak var store: ActivityStore?
     private var watcher: DispatchSourceFileSystemObject?
     private var directoryDescriptor: CInt = -1
-    private var pollTimer: Timer?
+    private lazy var poller = PollTimer(interval: 2.0) { [weak self] in self?.evaluate() }
     private var lastMode: String??
     private var isPrimed = false
 
@@ -34,11 +34,7 @@ public final class FocusProvider: SystemProvider {
 
         // The vnode watch misses atomic replaces often enough that a slow poll
         // earns its keep as a backstop.
-        let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.evaluate() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        pollTimer = timer
+        poller.start()
 
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(900))
@@ -51,10 +47,12 @@ public final class FocusProvider: SystemProvider {
         watcher = nil
         if directoryDescriptor >= 0 { close(directoryDescriptor) }
         directoryDescriptor = -1
-        pollTimer?.invalidate()
-        pollTimer = nil
+        poller.stop()
         store = nil
     }
+
+    public func suspend() { poller.suspend() }
+    public func resume() { poller.resume() }
 
     // MARK: - Watching
 

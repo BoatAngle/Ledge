@@ -1,6 +1,8 @@
 import Darwin
 import Foundation
 import IsletCore
+import IsletModules
+import IsletUI
 
 /// Listens on the Unix socket and applies incoming requests to the store.
 ///
@@ -20,8 +22,15 @@ final class ActivityServer {
     }
 
     private let store: ActivityStore
+    /// Timers need an owner with a run loop, so `.startTimer` is delegated to
+    /// the provider rather than synthesised from an activity here.
+    weak var timers: TimerProvider?
+    weak var shelf: DropShelf?
     private var listenDescriptor: Int32 = -1
     private var acceptSource: DispatchSourceRead?
+    /// Identity of the socket file we created, so shutdown can tell ours apart
+    /// from a successor's.
+    private var boundInode: (device: dev_t, inode: ino_t)?
     private let ioQueue = DispatchQueue(label: "com.islet.server.io", qos: .userInitiated)
 
     init(store: ActivityStore) {
@@ -77,6 +86,7 @@ final class ActivityServer {
         }
 
         listenDescriptor = descriptor
+        boundInode = Self.identity(ofFileAt: path)
         let source = DispatchSource.makeReadSource(fileDescriptor: descriptor, queue: .main)
         source.setEventHandler { [weak self] in
             MainActor.assumeIsolated { self?.acceptPending() }
@@ -90,7 +100,25 @@ final class ActivityServer {
         acceptSource = nil
         if listenDescriptor >= 0 { close(listenDescriptor) }
         listenDescriptor = -1
+
+        // Only remove the socket if it is still the one we created.
+        //
+        // Relaunching kills the old process and starts a new one, and the two
+        // overlap: the newcomer binds a fresh socket while the outgoing app is
+        // still tearing down. An unconditional `unlink` here deletes the *new*
+        // app's socket, leaving it listening on an unreachable inode — the app
+        // looks alive but every client reports "Islet isn't running".
+        guard let boundInode,
+              let current = Self.identity(ofFileAt: IsletSocket.path),
+              current == boundInode
+        else { return }
         unlink(IsletSocket.path)
+    }
+
+    private static func identity(ofFileAt path: String) -> (device: dev_t, inode: ino_t)? {
+        var info = stat()
+        guard stat(path, &info) == 0 else { return nil }
+        return (info.st_dev, info.st_ino)
     }
 
     // MARK: - Connections
@@ -156,6 +184,34 @@ final class ActivityServer {
         case .list:
             let live = store.composition.all
             return IsletResponse(ok: true, activities: live, count: live.count)
+
+        case .startTimer:
+            guard let duration = request.duration, duration > 0 else {
+                return .failure("`startTimer` needs a positive duration in seconds.")
+            }
+            guard let timers else {
+                return .failure("The timer module is turned off.")
+            }
+            let id = timers.startTimer(label: request.content?.title, duration: duration)
+            return IsletResponse(ok: true, id: id)
+
+        case .shelf:
+            guard let shelf else { return .failure("The shelf isn't available.") }
+            let paths = request.paths ?? []
+            guard !paths.isEmpty else {
+                shelf.clear()
+                return IsletResponse(ok: true, count: 0)
+            }
+            // Resolve and reject anything that isn't actually there, rather
+            // than shelving a broken reference the user can't act on.
+            let urls = paths.compactMap { path -> URL? in
+                let expanded = (path as NSString).expandingTildeInPath
+                let url = URL(fileURLWithPath: expanded).standardizedFileURL
+                return FileManager.default.fileExists(atPath: url.path) ? url : nil
+            }
+            guard !urls.isEmpty else { return .failure("None of those paths exist.") }
+            shelf.accept(urls)
+            return IsletResponse(ok: true, count: shelf.files.count)
         }
     }
 

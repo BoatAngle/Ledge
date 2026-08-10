@@ -15,7 +15,7 @@ public final class PrivacyProvider: SystemProvider {
     public let isAvailable = true
 
     private weak var store: ActivityStore?
-    private var timer: Timer?
+    private lazy var poller = PollTimer(interval: 0.5) { [weak self] in self?.poll() }
     private var lastState = State(camera: false, microphone: false)
 
     struct State: Equatable {
@@ -31,19 +31,17 @@ public final class PrivacyProvider: SystemProvider {
         lastState = currentState()
         if lastState.isActive { publish(lastState, announce: false) }
 
-        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.poll() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        poller.start()
     }
 
     public func stop() {
-        timer?.invalidate()
-        timer = nil
+        poller.stop()
         store?.end(id: identifier)
         store = nil
     }
+
+    public func suspend() { poller.suspend() }
+    public func resume() { poller.resume() }
 
     private func poll() {
         let state = currentState()

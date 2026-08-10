@@ -50,6 +50,8 @@ public struct IsletColor: Codable, Hashable, Sendable {
     public static let yellow = named["yellow"]!
     public static let green = named["green"]!
     public static let cyan = named["cyan"]!
+    public static let teal = named["teal"]!
+    public static let mint = named["mint"]!
     public static let blue = named["blue"]!
     public static let indigo = named["indigo"]!
     public static let purple = named["purple"]!

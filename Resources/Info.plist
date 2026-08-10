@@ -31,6 +31,12 @@
 	     what's playing. Music and Spotify are the only apps Islet talks to. -->
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Islet reads the current track from Music and Spotify so it can show what's playing in the notch. It never sends this anywhere.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Islet shows your next meeting in the notch as it approaches, with a button to join. It only reads events; it never changes or shares them.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Islet shows your next meeting in the notch as it approaches, with a button to join. It only reads events; it never changes or shares them.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Islet watches your Downloads folder for in-progress downloads so it can show their progress in the notch.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT licensed. Copyright © 2026 Harrison Braun.</string>
 </dict>

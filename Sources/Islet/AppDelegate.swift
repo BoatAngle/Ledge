@@ -12,14 +12,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var server = ActivityServer(store: store)
     private var statusItem: NSStatusItem?
     private var allProviders: [any SystemProvider] = []
+    private var timerProvider: TimerProvider?
+    private lazy var lockMonitor = LockMonitor { [weak self] isLocked in
+        // Providers stand down while the machine is locked; activities already
+        // on the island (a running timer, say) stay exactly where they were.
+        if isLocked { self?.registry.suspendAll() } else { self?.registry.resumeAll() }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowController.show()
 
-        allProviders = ProviderRegistry.standard()
-        registry.start(allProviders.filter(isEnabled), store: store)
+        // Providers start on the *next* run-loop turn, never inline here.
+        //
+        // Several of them touch TCC-protected resources — the Downloads folder,
+        // Calendar, Apple Events. Triggering a consent prompt from inside
+        // `applicationDidFinishLaunching` deadlocks: the app hasn't finished
+        // launching, so the prompt can't be presented, so launch never
+        // finishes. It looks exactly like a hang with no crash log.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.allProviders = ProviderRegistry.standard()
+            self.registry.start(self.allProviders.filter(self.isEnabled), store: self.store)
+            self.timerProvider = self.registry.providers.compactMap { $0 as? TimerProvider }.first
+            self.server.timers = self.timerProvider
+            self.lockMonitor.start()
+            self.statusItem?.menu = self.buildMenu()
+        }
 
         do {
+            server.shelf = windowController.shelf
             try server.start()
         } catch {
             // The island is still fully useful without the API — the built-in
@@ -32,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        lockMonitor.stop()
         registry.stop()
         server.stop()
         windowController.hide()
@@ -78,6 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let modulesItem = NSMenuItem(title: "Modules", action: nil, keyEquivalent: "")
         modulesItem.submenu = modules
         menu.addItem(modulesItem)
+
+        menu.addItem(timerMenuItem())
 
         let demo = NSMenuItem(title: "Run Demo Activity", action: #selector(runDemo), keyEquivalent: "")
         demo.target = self
@@ -131,6 +155,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registry.stop()
         allProviders = ProviderRegistry.standard()
         registry.start(allProviders.filter(isEnabled), store: store)
+        timerProvider = registry.providers.compactMap { $0 as? TimerProvider }.first
+        server.timers = timerProvider
+        statusItem?.menu = buildMenu()
+    }
+
+    private func timerMenuItem() -> NSMenuItem {
+        let submenu = NSMenu()
+        for minutes in [1, 5, 10, 25, 45] {
+            let item = NSMenuItem(
+                title: "\(minutes) minutes",
+                action: #selector(startTimer(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = minutes
+            submenu.addItem(item)
+        }
+
+        let running = timerProvider?.running ?? []
+        if !running.isEmpty {
+            submenu.addItem(.separator())
+            for timer in running {
+                let item = NSMenuItem(
+                    title: "Cancel \(timer.label) — \(Self.clock(timer.remaining)) left",
+                    action: #selector(cancelTimer(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = timer.id
+                submenu.addItem(item)
+            }
+        }
+
+        let item = NSMenuItem(title: "Start Timer", action: nil, keyEquivalent: "")
+        item.submenu = submenu
+        item.isEnabled = timerProvider != nil
+        return item
+    }
+
+    private static func clock(_ interval: TimeInterval) -> String {
+        let total = Int(interval.rounded())
+        return total >= 3600
+            ? String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
+            : String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    @objc private func startTimer(_ sender: NSMenuItem) {
+        guard let minutes = sender.representedObject as? Int else { return }
+        timerProvider?.startTimer(label: nil, duration: TimeInterval(minutes * 60))
+        statusItem?.menu = buildMenu()
+    }
+
+    @objc private func cancelTimer(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        timerProvider?.cancel(id: id)
         statusItem?.menu = buildMenu()
     }
 

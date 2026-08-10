@@ -39,12 +39,18 @@ the same dimensions.
 **System modules**, all optional, all toggleable from the menu bar:
 
 - **Now Playing** — Apple Music and Spotify, with album art, a live waveform, and transport controls
+- **Timers** — countdowns that ring, survive a restart, and tick without any updates being sent
+- **Calendar & Events** — your next meeting as it approaches, with a Join button that finds the video link wherever the invite hid it
+- **Downloads** — in-progress downloads from any browser, and a completion notice
+- **Drop shelf** — drag files onto the notch to park them, then drag them back out, AirDrop, or reveal in Finder
 - **Battery & Charging** — announces plug-in, low-battery thresholds, and full charge
 - **Sound & Output Device** — volume HUD, plus "your AirPods just connected"
 - **Display Brightness** — brightness HUD
 - **Focus** — the active Focus, persistently but quietly
 - **Caps Lock** — a small confirmation
 - **Camera & Microphone** — privacy indicators the moment something starts using them
+
+Everything stands down while the machine is locked or the display is asleep.
 
 ## The part nothing else has
 
@@ -63,8 +69,11 @@ islet end $id
 # One-shot notifications.
 islet flash --title "Tests passed" --icon symbol:checkmark.seal.fill --tint green
 
-# Countdowns tick locally — no need to send an update every second.
-islet start --title "Pomodoro" --countdown 1500 --icon symbol:timer
+# A real timer that chimes at zero.
+islet timer 25m --label Pomodoro
+
+# Park build output on the island, then drag it straight into a message.
+islet shelf out/*.png
 ```
 
 Long `ffmpeg` renders, CI watches, `brew upgrade`, a training run, a deploy —
@@ -76,7 +85,7 @@ network can reach it. `islet` is a thin client over it; you can just as easily
 talk to it from Python, Node, or `nc`.
 
 Shortcuts and Siri get native actions too: **Show Activity in Notch**, **Remove
-Notch Activity**, and **Clear the Notch**.
+Notch Activity**, **Clear the Notch**, and **Start a Notch Timer**.
 
 ## Install
 
@@ -107,6 +116,8 @@ islet end <id>     Remove an activity.
 islet end-all      Remove everything (optionally --source <name>).
 islet list         Show what's currently on the island.
 islet run -- <cmd> Run a command, showing progress; reports success or failure.
+islet timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
+islet shelf [files] Park files on the island. No arguments clears it.
 islet ping         Check that Islet.app is running.
 ```
 
@@ -131,7 +142,7 @@ Only `title` is required — you never have to write empty arrays.
 ```
 IsletCore      Model, scheduler, geometry, wire protocol. No AppKit, no SwiftUI.
 IsletUI        The island: window, shape, morph, presentations.
-IsletModules   The seven system providers.
+IsletModules   The eleven system providers.
 Islet          The app: menu bar, socket server, App Intents.
 IsletCLI       The `islet` binary.
 ```
@@ -148,16 +159,26 @@ hard failure.
 
 ## Permissions
 
-- **Automation** (Music/Spotify) — needed only by the Now Playing module, prompted on first use.
+Three prompts, each from one module, each declinable without affecting anything else:
+
+- **Automation** (Music/Spotify) — Now Playing.
+- **Calendar** — the next-meeting module. Read-only.
+- **Downloads folder** — download tracking.
+
+And three you will never see:
+
 - **No Accessibility access.** Caps Lock is read by polling `NSEvent.modifierFlags`, not by installing a global key monitor — asking to "control your computer" so we can draw an arrow would be a bad trade.
 - **No microphone or camera access.** The privacy module asks the *hardware* whether someone else is using them; it never opens them.
+- **No Full Disk Access.** Downloads are tracked through the partial files browsers leave in `~/Downloads`, not by reading Safari's container.
 
 ## Known gaps
 
 - **Now Playing is Music and Spotify only.** The private MediaRemote framework that exposed system-wide Now Playing was locked behind an entitlement in macOS 15.4, so building on it would ship something that breaks. `MediaSource` is a protocol; an adapter can drop in when a supported path exists.
 - **Brightness uses a private framework** (`DisplayServices`), loaded by name at runtime. There is no public API to read display brightness. If it ever vanishes, the module reports unavailable and everything else keeps working.
 - **Ad-hoc signed.** Each rebuild changes the signature, so macOS may re-prompt for Automation access. Sign with a real identity to stop that.
-- **Not yet built:** Calendar, timers, the AirDrop shelf, download tracking, and lock-screen presence. The engine and the activity model already support all of them — they're modules waiting to be written.
+- **No lock-screen presence, and there won't be.** Other notch apps advertise it; the macOS login window runs in a separate session and third-party processes cannot draw into it. Islet instead notices the lock and suspends every poll until you're back.
+- **Downloads show bytes received, not a percentage.** A partial file says how much has landed but never how much is coming. A progress bar built on a guess would be worse than an honest indeterminate one.
+- **Dragging *onto* the notch needs a real drag** — it could not be verified by script, only by hand. `islet shelf <files>` covers the same ground and is fully tested.
 
 ## Licence
 

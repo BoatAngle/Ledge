@@ -133,5 +133,45 @@ struct IsletShortcuts: AppShortcutsProvider {
             shortTitle: "Clear the Notch",
             systemImageName: "xmark.circle"
         )
+        AppShortcut(
+            intent: StartTimerIntent(),
+            phrases: ["Start a timer in \(.applicationName)"],
+            shortTitle: "Start a Timer",
+            systemImageName: "timer"
+        )
+    }
+}
+
+struct StartTimerIntent: AppIntent {
+    static let title: LocalizedStringResource = "Start a Notch Timer"
+    static let description = IntentDescription(
+        "Starts a countdown in the notch that chimes when it finishes.",
+        categoryName: "Island"
+    )
+
+    @Parameter(title: "Duration", description: "Minutes.", default: 25)
+    var minutes: Double
+
+    @Parameter(title: "Label")
+    var label: String?
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Start a \(\.$minutes) minute timer") {
+            \.$label
+        }
+    }
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        guard minutes > 0 else {
+            throw IsletIntentError.unavailable("A timer needs a duration greater than zero.")
+        }
+        let response = try send(
+            IsletRequest(
+                command: .startTimer,
+                content: label.map { ActivityContent(title: $0) },
+                duration: minutes * 60
+            )
+        )
+        return .result(value: response.id ?? "")
     }
 }

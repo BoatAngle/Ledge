@@ -63,6 +63,9 @@ run: stop app
 
 stop:
 	@pkill -x Islet 2>/dev/null || true
+	@# Wait for it to actually exit. Launching a new copy while the old one is
+	@# still tearing down races over the socket file.
+	@for i in $$(seq 1 40); do pgrep -x Islet >/dev/null || break; sleep 0.1; done
 
 test:
 	swift test

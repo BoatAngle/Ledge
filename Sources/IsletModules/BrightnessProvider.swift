@@ -16,7 +16,7 @@ public final class BrightnessProvider: SystemProvider {
     public var isAvailable: Bool { DisplayServicesBridge.shared.isAvailable }
 
     private weak var store: ActivityStore?
-    private var timer: Timer?
+    private lazy var poller = PollTimer(interval: 0.1) { [weak self] in self?.poll() }
     private var lastValue: Float?
     private var isPrimed = false
 
@@ -29,11 +29,7 @@ public final class BrightnessProvider: SystemProvider {
         // 10 Hz. The read is a single function call into a cached IOKit
         // property, so this is far cheaper than it looks, and anything slower
         // makes the HUD feel laggy against the keyboard's own repeat rate.
-        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.poll() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        poller.start()
 
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(900))
@@ -42,9 +38,17 @@ public final class BrightnessProvider: SystemProvider {
     }
 
     public func stop() {
-        timer?.invalidate()
-        timer = nil
+        poller.stop()
         store = nil
+    }
+
+    public func suspend() { poller.suspend() }
+
+    public func resume() {
+        // Re-baseline: brightness may well have changed while we weren't
+        // looking, and we don't want to flash a HUD for that.
+        lastValue = currentBrightness()
+        poller.resume()
     }
 
     private func currentBrightness() -> Float? {

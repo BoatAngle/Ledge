@@ -16,7 +16,7 @@ public final class CapsLockProvider: SystemProvider {
     public let isAvailable = true
 
     private weak var store: ActivityStore?
-    private var timer: Timer?
+    private lazy var poller = PollTimer(interval: 1.0 / 15.0) { [weak self] in self?.poll() }
     private var lastState: Bool?
 
     public init() {}
@@ -25,17 +25,19 @@ public final class CapsLockProvider: SystemProvider {
         self.store = store
         lastState = NSEvent.modifierFlags.contains(.capsLock)
 
-        let timer = Timer(timeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.poll() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        poller.start()
     }
 
     public func stop() {
-        timer?.invalidate()
-        timer = nil
+        poller.stop()
         store = nil
+    }
+
+    public func suspend() { poller.suspend() }
+
+    public func resume() {
+        lastState = NSEvent.modifierFlags.contains(.capsLock)
+        poller.resume()
     }
 
     private func poll() {

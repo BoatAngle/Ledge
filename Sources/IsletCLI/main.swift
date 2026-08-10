@@ -27,6 +27,8 @@ do {
     case "list":            try list()
     case "ping":            try ping()
     case "run":             try run()
+    case "timer":           try timer()
+    case "shelf":           try shelf()
     case "help":            printUsage()
     default:
         FileHandle.standardError.write(Data("Unknown command \"\(subcommand)\".\n\n".utf8))
@@ -97,6 +99,33 @@ func list() throws {
             .map { " \(Int($0 * 100))%" } ?? ""
         print("\(activity.id)\t[\(activity.source)]\t\(activity.content.title)\(progress)")
     }
+}
+
+/// `islet shelf a.png b.png` — park files on the island, or clear it.
+func shelf() throws {
+    let paths = Array(parsed.positional.dropFirst())
+    let response = try client.send(IsletRequest(command: .shelf, paths: paths))
+    let count = response.count ?? 0
+    emit(["count": count], plain: count == 0 ? "shelf cleared" : "\(count) on the shelf")
+}
+
+/// `islet timer 25m` — a real timer the app owns, so it rings.
+func timer() throws {
+    guard let raw = parsed.positional.count > 1 ? parsed.positional[1] : parsed.string("for") else {
+        fail("`timer` needs a duration: islet timer 25m")
+    }
+    guard let seconds = IsletDuration.parse(raw) else {
+        fail("Couldn't read \"\(raw)\" as a duration. Try 25m, 90s, 1h30m, or 25:00.")
+    }
+    let label = parsed.string("label") ?? parsed.string("title")
+    let response = try client.send(
+        IsletRequest(
+            command: .startTimer,
+            content: label.map { ActivityContent(title: $0) },
+            duration: seconds
+        )
+    )
+    emit(["id": response.id ?? ""], plain: response.id ?? "")
 }
 
 func ping() throws {
@@ -305,6 +334,8 @@ func printUsage() {
       end-all      Remove everything (optionally --source <name>).
       list         Show what's currently on the island.
       run -- <cmd> Run a command, showing progress; reports success or failure.
+      timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
+      shelf [files] Park files on the island to drag out later. No args clears.
       ping         Check that Islet.app is running.
 
     CONTENT
@@ -337,6 +368,8 @@ func printUsage() {
       islet update $id --progress 60%
       islet end $id
       islet flash --title "Deployed" --icon symbol:checkmark.seal.fill --tint green
+      islet timer 25m --label Pomodoro
+      islet shelf ~/Desktop/*.png
     """)
 }
 

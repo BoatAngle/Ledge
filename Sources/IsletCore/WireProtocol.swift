@@ -35,6 +35,18 @@ public enum IsletCommand: String, Codable, Sendable {
     case endAll
     case list
     case ping
+    /// Starts a real timer the app owns, so it can alert at zero.
+    ///
+    /// A caller *could* fake one with `present` plus `countdownTarget`, but
+    /// nothing would ring — the island would just quietly reach 0:00. Timers
+    /// need an owner with a run loop.
+    case startTimer
+    /// Put files on the shelf without dragging them there.
+    ///
+    /// The shelf is most useful as the tail of a pipeline — `islet shelf
+    /// out/*.png` and then drag them straight into a message — so it would be
+    /// a shame to make dragging the only way in.
+    case shelf
 }
 
 public struct IsletRequest: Codable, Sendable {
@@ -43,19 +55,40 @@ public struct IsletRequest: Codable, Sendable {
     public var id: String?
     public var content: ActivityContent?
     public var source: String?
+    /// Seconds. Only meaningful for `.startTimer`.
+    public var duration: Double?
+    /// File paths. Only meaningful for `.shelf`; empty clears it.
+    public var paths: [String]?
 
     public init(
         command: IsletCommand,
         activity: Activity? = nil,
         id: String? = nil,
         content: ActivityContent? = nil,
-        source: String? = nil
+        source: String? = nil,
+        duration: Double? = nil,
+        paths: [String]? = nil
     ) {
         self.command = command
         self.activity = activity
         self.id = id
         self.content = content
         self.source = source
+        self.duration = duration
+        self.paths = paths
+    }
+
+    /// Hand-written so every field but `command` is optional — the same
+    /// courtesy `ActivityContent` extends to scripts writing JSON by hand.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        command = try container.decode(IsletCommand.self, forKey: .command)
+        activity = try container.decodeIfPresent(Activity.self, forKey: .activity)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        content = try container.decodeIfPresent(ActivityContent.self, forKey: .content)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+        paths = try container.decodeIfPresent([String].self, forKey: .paths)
     }
 }
 

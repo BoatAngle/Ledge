@@ -12,6 +12,7 @@ public struct IsletClient: Sendable {
         case io(String)
         case malformedResponse
         case rejected(String)
+        case timedOut
 
         public var description: String {
             switch self {
@@ -23,14 +24,26 @@ public struct IsletClient: Sendable {
                 return "Islet sent a response this client couldn't parse."
             case .rejected(let reason):
                 return reason
+            case .timedOut:
+                return """
+                Islet didn't respond in time. It may be waiting on a permission \
+                prompt — check for a dialog, then try again.
+                """
             }
         }
     }
 
     public var socketPath: String
+    /// Give up rather than block forever.
+    ///
+    /// The server answers on the main thread, so anything that blocks it — a
+    /// permission prompt waiting on the user, most memorably — would otherwise
+    /// leave `islet` wedged in a shell script with no way out.
+    public var timeout: TimeInterval
 
-    public init(socketPath: String = IsletSocket.path) {
+    public init(socketPath: String = IsletSocket.path, timeout: TimeInterval = 5) {
         self.socketPath = socketPath
+        self.timeout = timeout
     }
 
     /// True when something is listening. Cheap enough to call before each use.
@@ -90,6 +103,14 @@ public struct IsletClient: Sendable {
             if err == ECONNREFUSED || err == ENOENT { throw ClientError.notRunning }
             throw ClientError.io(String(cString: strerror(err)))
         }
+
+        var tv = timeval(
+            tv_sec: Int(timeout),
+            tv_usec: Int32((timeout - floor(timeout)) * 1_000_000)
+        )
+        let timeoutSize = socklen_t(MemoryLayout<timeval>.size)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, timeoutSize)
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, timeoutSize)
         return fd
     }
 
@@ -115,6 +136,7 @@ public struct IsletClient: Sendable {
             let count = Darwin.read(fd, &chunk, chunk.count)
             if count < 0 {
                 if errno == EINTR { continue }
+                if errno == EAGAIN || errno == EWOULDBLOCK { throw ClientError.timedOut }
                 throw ClientError.io(String(cString: strerror(errno)))
             }
             if count == 0 { break }

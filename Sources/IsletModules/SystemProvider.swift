@@ -18,6 +18,16 @@ public protocol SystemProvider: AnyObject {
 
     func start(store: ActivityStore)
     func stop()
+
+    /// Pause work because the machine is locked or the display is asleep.
+    /// Event-driven providers can ignore this; pollers should stand down.
+    func suspend()
+    func resume()
+}
+
+public extension SystemProvider {
+    func suspend() {}
+    func resume() {}
 }
 
 /// Starts and stops the built-in providers as a group.
@@ -33,6 +43,9 @@ public final class ProviderRegistry {
     public static func standard() -> [any SystemProvider] {
         [
             MediaProvider(),
+            TimerProvider(),
+            CalendarProvider(),
+            DownloadsProvider(),
             BatteryProvider(),
             VolumeProvider(),
             BrightnessProvider(),
@@ -56,6 +69,16 @@ public final class ProviderRegistry {
             store?.end(id: provider.identifier)
         }
         providers.removeAll()
+    }
+
+    /// Stand every provider down. Activities already on the island stay put —
+    /// a running timer must survive the lock.
+    public func suspendAll() {
+        providers.forEach { $0.suspend() }
+    }
+
+    public func resumeAll() {
+        providers.forEach { $0.resume() }
     }
 
     /// Names of modules that couldn't run here, for the settings UI to explain.

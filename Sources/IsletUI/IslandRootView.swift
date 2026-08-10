@@ -8,6 +8,9 @@ import SwiftUI
 public struct IslandRootView: View {
     public var store: ActivityStore
     public var metrics: IslandMetrics
+    /// Files parked on the island, rendered in place of the generic panel when
+    /// the shelf is what's showing.
+    public var shelf: DropShelf?
     /// Called when the island's interactive footprint changes, so the window
     /// can keep its click-through region in sync.
     public var onFootprintChange: (CGSize) -> Void
@@ -21,10 +24,12 @@ public struct IslandRootView: View {
     public init(
         store: ActivityStore,
         metrics: IslandMetrics,
+        shelf: DropShelf? = nil,
         onFootprintChange: @escaping (CGSize) -> Void = { _ in }
     ) {
         self.store = store
         self.metrics = metrics
+        self.shelf = shelf
         self.onFootprintChange = onFootprintChange
     }
 
@@ -65,8 +70,22 @@ public struct IslandRootView: View {
         mode == .idle && metrics.hasPhysicalNotch ? 0 : IslandGeometry.topFillet
     }
 
+    /// Blank width reserved on the leading side in `.split`.
+    ///
+    /// Without it the whole footprint gets centred in the window, which drags
+    /// the compact body left by half the detached circle's width — so the
+    /// island's notch gap stops lining up with the actual camera. Reserving the
+    /// same space on the left keeps the body centred on the hardware and lets
+    /// the circle hang off to the right, which is what Apple's does.
+    private var leadingReserve: CGFloat {
+        mode == .split ? IslandGeometry.splitGap + IslandGeometry.minimalDiameter : 0
+    }
+
     private var footprint: CGSize {
-        CGSize(width: totalSize.width + fillet * 2, height: totalSize.height)
+        CGSize(
+            width: totalSize.width + fillet * 2 + leadingReserve,
+            height: totalSize.height
+        )
     }
 
     // MARK: Body
@@ -84,14 +103,15 @@ public struct IslandRootView: View {
                 goo: goo.radius
             )
             .shadow(color: .black.opacity(mode == .expanded ? 0.5 : 0.28), radius: 14, y: 6)
+            .offset(x: leadingReserve)
 
             content
                 .frame(width: bodySize.width, height: bodySize.height, alignment: .top)
-                .offset(x: fillet)
+                .offset(x: fillet + leadingReserve)
 
             if let minimalFrame, let secondary = composition.secondary {
                 MinimalView(activity: secondary, diameter: minimalFrame.width)
-                    .offset(x: fillet + minimalFrame.minX, y: minimalFrame.minY)
+                    .offset(x: fillet + leadingReserve + minimalFrame.minX, y: minimalFrame.minY)
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
         }
@@ -131,7 +151,11 @@ public struct IslandRootView: View {
         case .expanded:
             VStack(spacing: 0) {
                 compactStrip(height: metrics.notchSize.height)
-                if let activity = composition.expandedActivity {
+                if let activity = composition.expandedActivity,
+                   activity.nativeView == .dropZone, let shelf, !shelf.files.isEmpty {
+                    DropShelfView(shelf: shelf)
+                        .transition(.opacity.combined(with: .offset(y: -8)))
+                } else if let activity = composition.expandedActivity {
                     ExpandedView(
                         activity: activity,
                         siblings: composition.all,

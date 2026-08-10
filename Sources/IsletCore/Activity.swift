@@ -46,6 +46,11 @@ public enum NativeViewKind: String, Codable, Hashable, Sendable {
     case focus
     case capsLock
     case privacy
+    case calendar
+    case timer
+    case download
+    /// The shelf that opens when files are dragged to the notch.
+    case dropZone
 }
 
 /// One thing the island is currently reporting.
