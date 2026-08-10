@@ -1,0 +1,65 @@
+import Foundation
+import IsletCore
+
+/// A source of system state that posts activities into the island.
+///
+/// Every provider degrades quietly. If the API it needs isn't available — a
+/// private framework moved, the user declined a permission, the hardware has no
+/// battery — it reports `isAvailable == false` and the island simply never
+/// shows that module. Nothing should ever be a hard failure.
+@MainActor
+public protocol SystemProvider: AnyObject {
+    /// Stable identifier, also used as the activity id so updates coalesce.
+    var identifier: String { get }
+    /// Human-readable name for settings.
+    var displayName: String { get }
+    /// False when this machine or this user can't support the module.
+    var isAvailable: Bool { get }
+
+    func start(store: ActivityStore)
+    func stop()
+}
+
+/// Starts and stops the built-in providers as a group.
+@MainActor
+public final class ProviderRegistry {
+    public private(set) var providers: [any SystemProvider] = []
+    private weak var store: ActivityStore?
+
+    public init() {}
+
+    /// Every module that ships with the app, in the order they should be
+    /// offered in settings.
+    public static func standard() -> [any SystemProvider] {
+        [
+            MediaProvider(),
+            BatteryProvider(),
+            VolumeProvider(),
+            BrightnessProvider(),
+            FocusProvider(),
+            CapsLockProvider(),
+            PrivacyProvider(),
+        ]
+    }
+
+    public func start(_ providers: [any SystemProvider], store: ActivityStore) {
+        self.store = store
+        for provider in providers where provider.isAvailable {
+            provider.start(store: store)
+            self.providers.append(provider)
+        }
+    }
+
+    public func stop() {
+        for provider in providers {
+            provider.stop()
+            store?.end(id: provider.identifier)
+        }
+        providers.removeAll()
+    }
+
+    /// Names of modules that couldn't run here, for the settings UI to explain.
+    public func unavailable(from all: [any SystemProvider]) -> [String] {
+        all.filter { !$0.isAvailable }.map(\.displayName)
+    }
+}
