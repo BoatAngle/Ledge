@@ -8,7 +8,7 @@ real time.
 
 ```bash
 make run     # compile + assemble Islet.app + relaunch
-make test    # 43 tests over IsletCore and IsletUI
+make test    # 69 tests across Core, UI, and Modules
 make app     # bundle only
 make stop    # pkill
 ```
@@ -143,6 +143,49 @@ CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
 
 Dragging files *onto* the notch can't be scripted safely — it needs a real
 Finder drag. `islet shelf <files>` exercises the same shelf code and is tested.
+
+## Visual system
+
+`IslandDesign` is the single source for spacing, type, surface, shadow, and
+control styling. Add to it rather than putting point sizes in a view.
+
+The constraint that shapes all of it: **the island overlaps the physical camera
+housing, so the top must stay true black.** Depth originates at the bottom edge
+and falls downward — hence `surfaceFill(liftsAtBottom:)` running dark-to-lighter
+going *down*, the opposite of the usual light-from-above treatment. At idle
+`hasDepth` is false and the shadow spec is `.none`; anything else shows a seam
+where drawn black meets real black.
+
+The silhouette masks a gradient rather than filling one directly:
+`alphaThreshold` only works on a flat colour, so the metaball pass produces a
+shape that then masks the surface. That's what lets the island have depth *and*
+merge like liquid.
+
+## Per-module appearance
+
+`ModuleAppearance` (tint, scale, slot, priority offset) is stored per module as
+JSON in `UserDefaults` under `appearance.<id>`. Three things to know:
+
+1. `Activity.module` is what appearance keys off — not `id`, because one module
+   posts many activities (every running timer is its own).
+2. Slot preference is applied as **priority bias**, not a separate placement
+   pass. One ordering rule, not two.
+3. Decoding clamps. These values are user-writable via `defaults write`, and a
+   scale of 40 would put a glyph clean off the notch.
+
+Changing appearance has to reach two places: the renderer reads
+`settings.appearanceRevision` so `@Observable` registers a dependency it
+otherwise couldn't (the data lives in `UserDefaults`), and
+`.isletAppearanceChanged` triggers `store.refresh()` so the scheduler re-sorts —
+ordering is only recomputed when activities change, so without it the position
+slider would do nothing until the next event.
+
+## Settings deep links
+
+`islet settings --tab weather` and `islet settings --customize system.media`
+exist partly because synthetic clicks on a SwiftUI `TabView` tab bar and on
+`Form` row buttons do not reliably register on a non-key window. They are real
+features, and also the only practical way to screenshot those surfaces.
 
 ## Not yet built
 
