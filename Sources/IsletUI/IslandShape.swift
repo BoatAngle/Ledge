@@ -73,6 +73,7 @@ public struct NotchShape: Shape {
 /// the shapes render perfectly crisp; a permanent blur/threshold pass would
 /// soften the fillets for no benefit.
 public struct IslandSilhouette: View {
+    @Environment(\.islandTheme) private var theme
     public var bodySize: CGSize
     public var minimalFrame: CGRect?
     public var topFillet: CGFloat
@@ -81,6 +82,12 @@ public struct IslandSilhouette: View {
     /// False at idle, where the island *is* the camera housing and any lift off
     /// pure black would show as a seam against the bezel.
     public var hasDepth: Bool
+    /// Height of the strip that stays fully opaque, whatever the theme.
+    ///
+    /// The island overlaps the camera housing; a translucent top would show the
+    /// desktop where solid hardware is. Glass therefore starts *below* the
+    /// camera strip rather than at the bezel.
+    public var opaqueTopHeight: CGFloat
 
     /// Slack around the canvas so the blur has somewhere to bleed.
     private let pad: CGFloat = 30
@@ -91,7 +98,8 @@ public struct IslandSilhouette: View {
         topFillet: CGFloat,
         bottomRadius: CGFloat,
         goo: CGFloat = 0,
-        hasDepth: Bool = true
+        hasDepth: Bool = true,
+        opaqueTopHeight: CGFloat = 0
     ) {
         self.bodySize = bodySize
         self.minimalFrame = minimalFrame
@@ -99,6 +107,7 @@ public struct IslandSilhouette: View {
         self.bottomRadius = bottomRadius
         self.goo = goo
         self.hasDepth = hasDepth
+        self.opaqueTopHeight = opaqueTopHeight
     }
 
     /// Total footprint including the fillet flare and, in `.split`, the
@@ -119,8 +128,7 @@ public struct IslandSilhouette: View {
             // directly isn't possible — `alphaThreshold` works on a flat colour
             // — so the mask is what lets the shape have depth *and* merge like
             // liquid.
-            Rectangle()
-                .fill(IslandDesign.surfaceFill(liftsAtBottom: hasDepth))
+            surface
                 .mask(alignment: .topLeading) { silhouetteMask }
 
             if hasDepth, goo <= 0.2 {
@@ -129,6 +137,19 @@ public struct IslandSilhouette: View {
         }
         .frame(width: footprint.width, height: footprint.height, alignment: .topLeading)
         .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var surface: some View {
+        if theme.usesGlass, hasDepth {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(alignment: .top) {
+                    Color.black.frame(height: max(opaqueTopHeight, 1))
+                }
+        } else {
+            Rectangle().fill(theme.surfaceFill(liftsAtBottom: hasDepth))
+        }
     }
 
     private var silhouetteMask: some View {
@@ -171,12 +192,12 @@ public struct IslandSilhouette: View {
     @ViewBuilder
     private var rim: some View {
         NotchShape(topFillet: topFillet, bottomRadius: bottomRadius)
-            .stroke(IslandDesign.rimHighlight, lineWidth: IslandDesign.rimWidth)
+            .stroke(theme.rim, lineWidth: IslandDesign.rimWidth)
             .frame(width: bodyFootprintWidth, height: bodySize.height)
 
         if let minimalFrame {
             Circle()
-                .stroke(IslandDesign.rimHighlight, lineWidth: IslandDesign.rimWidth)
+                .stroke(theme.rim, lineWidth: IslandDesign.rimWidth)
                 .frame(width: minimalFrame.width, height: minimalFrame.height)
                 .offset(x: topFillet + minimalFrame.minX, y: minimalFrame.minY)
         }

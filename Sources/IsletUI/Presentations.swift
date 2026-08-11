@@ -31,6 +31,7 @@ public struct ActivityStyle: Equatable, Sendable {
 /// Anything needing a sentence belongs in the expanded state, and resisting the
 /// urge to cram a title in here is most of what keeps it looking right.
 public struct CompactLeadingView: View {
+    @Environment(\.islandTheme) private var theme
     public var activity: Activity
     public var height: CGFloat
     public var style: ActivityStyle
@@ -42,16 +43,20 @@ public struct CompactLeadingView: View {
     }
 
     public var body: some View {
-        let glyph = min(height - 12, 22) * style.scale
+        let glyph = min(height - 12, 22) * style.scale * theme.compactGlyphScale
         Group {
             switch activity.nativeView {
             case .media:
                 Artwork(icon: activity.content.icon, size: glyph + 3, cornerRadius: 5)
             case .privacy:
-                PrivacyDot(tint: style.tint, size: glyph * 0.46)
+                PrivacyDot(tint: style.accentColor, size: glyph * 0.46)
             case .some, .none:
-                ActivityIconView(icon: activity.content.icon, size: glyph, tint: style.tint)
-                    .glyphGlow(style.tint, radius: glyph * 0.34, intensity: 0.42)
+                ActivityIconView(
+                    icon: activity.content.icon,
+                    size: glyph,
+                    tint: style.glyphColor(theme)
+                )
+                .glyphGlow(style.tint, radius: glyph * 0.34, intensity: style.glow(theme))
             }
         }
         .transition(.scale(scale: 0.62).combined(with: .opacity))
@@ -60,6 +65,7 @@ public struct CompactLeadingView: View {
 
 /// The glyph right of the camera housing.
 public struct CompactTrailingView: View {
+    @Environment(\.islandTheme) private var theme
     public var activity: Activity
     public var height: CGFloat
     public var style: ActivityStyle
@@ -76,7 +82,7 @@ public struct CompactTrailingView: View {
         Group {
             if activity.nativeView == .media {
                 WaveformView(
-                    color: style.tint,
+                    color: style.accentColor,
                     isAnimating: true,
                     size: CGSize(width: 18 * style.scale, height: (height - 16) * style.scale)
                 )
@@ -84,32 +90,32 @@ public struct CompactTrailingView: View {
                 LiveTimeText(
                     target: content.countdownTarget,
                     countUpFrom: content.countUpFrom,
-                    font: IslandDesign.Text.metric(metric),
-                    color: style.tint
+                    font: theme.metricFont(metric),
+                    color: style.accentColor
                 )
-                .glyphGlow(style.tint, radius: 6, intensity: 0.3)
+                .glyphGlow(style.tint, radius: 6, intensity: style.glow(theme) * 0.7)
             } else if let text = content.trailingText {
                 Text(text)
-                    .font(IslandDesign.Text.metric(metric))
+                    .font(theme.metricFont(metric))
                     .monospacedDigit()
-                    .foregroundStyle(style.tint)
+                    .foregroundStyle(style.accentColor)
                     .contentTransition(.numericText())
-                    .glyphGlow(style.tint, radius: 6, intensity: 0.3)
+                    .glyphGlow(style.tint, radius: 6, intensity: style.glow(theme) * 0.7)
             } else if let icon = content.trailingIcon {
                 ActivityIconView(
                     icon: icon,
-                    size: min(height - 12, 20) * style.scale,
-                    tint: style.tint
+                    size: min(height - 12, 20) * style.scale * theme.compactGlyphScale,
+                    tint: style.glyphColor(theme)
                 )
-                .glyphGlow(style.tint, radius: 6, intensity: 0.4)
+                .glyphGlow(style.tint, radius: 6, intensity: style.glow(theme))
             } else if let progress = content.progress {
-                IslandProgressRing(fraction: progress.fraction, tint: style.tint)
+                IslandProgressRing(fraction: progress.fraction, tint: style.accentColor)
                     .frame(
                         width: min(height - 14, 18) * style.scale,
                         height: min(height - 14, 18) * style.scale
                     )
             } else {
-                BreathingDot(tint: style.tint, size: 7 * style.scale)
+                BreathingDot(tint: style.accentColor, size: 7 * style.scale)
             }
         }
         .transition(.scale(scale: 0.62).combined(with: .opacity))
@@ -120,6 +126,7 @@ public struct CompactTrailingView: View {
 
 /// The detached circle that appears when a second activity is running.
 public struct MinimalView: View {
+    @Environment(\.islandTheme) private var theme
     public var activity: Activity
     public var diameter: CGFloat
     public var style: ActivityStyle
@@ -135,15 +142,15 @@ public struct MinimalView: View {
             if activity.nativeView == .media {
                 Artwork(icon: activity.content.icon, size: diameter - 8, cornerRadius: (diameter - 8) / 2)
             } else if let progress = activity.content.progress {
-                IslandProgressRing(fraction: progress.fraction, tint: style.tint, lineWidth: 2)
+                IslandProgressRing(fraction: progress.fraction, tint: style.accentColor, lineWidth: 2)
                     .frame(width: diameter - 11, height: diameter - 11)
             } else {
                 ActivityIconView(
                     icon: activity.content.icon,
                     size: (diameter - 13) * style.scale,
-                    tint: style.tint
+                    tint: style.glyphColor(theme)
                 )
-                .glyphGlow(style.tint, radius: 5, intensity: 0.45)
+                .glyphGlow(style.tint, radius: 5, intensity: style.glow(theme))
             }
         }
         .frame(width: diameter, height: diameter)
@@ -154,6 +161,7 @@ public struct MinimalView: View {
 
 /// The drop-down panel.
 public struct ExpandedView: View {
+    @Environment(\.islandTheme) private var theme
     public var activity: Activity
     public var siblings: [Activity]
     public var style: ActivityStyle
@@ -179,7 +187,7 @@ public struct ExpandedView: View {
 
     public var body: some View {
         let content = activity.content
-        VStack(alignment: .leading, spacing: IslandDesign.space(3)) {
+        VStack(alignment: .leading, spacing: theme.panelSpacing) {
             header(content)
 
             if let body = content.body {
@@ -231,11 +239,13 @@ public struct ExpandedView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(content.title)
-                    .islandTitle()
+                    .font(theme.titleFont)
+                    .tracking(theme.titleTracking)
+                    .foregroundStyle(IslandDesign.Ink.primary)
                     .lineLimit(1)
                 if let subtitle = content.subtitle {
                     Text(subtitle)
-                        .font(IslandDesign.Text.subtitle)
+                        .font(theme.subtitleFont)
                         .foregroundStyle(IslandDesign.Ink.secondary)
                         .lineLimit(1)
                 }
@@ -247,14 +257,14 @@ public struct ExpandedView: View {
                 LiveTimeText(
                     target: content.countdownTarget,
                     countUpFrom: content.countUpFrom,
-                    font: IslandDesign.Text.metric(17),
-                    color: style.tint
+                    font: theme.metricFont(17),
+                    color: style.accentColor
                 )
             } else if let trailing = content.trailingText {
                 Text(trailing)
-                    .font(IslandDesign.Text.metric(16))
+                    .font(theme.metricFont(16))
                     .monospacedDigit()
-                    .foregroundStyle(style.tint)
+                    .foregroundStyle(style.accentColor)
                     .contentTransition(.numericText())
             }
         }
@@ -264,26 +274,68 @@ public struct ExpandedView: View {
     /// hairline so it doesn't float against the black.
     @ViewBuilder
     private func mark(_ content: ActivityContent) -> some View {
-        let size: CGFloat = 38
-        if case .symbol = content.icon {
-            IconChip(tint: style.tint, size: size) {
-                ActivityIconView(icon: content.icon, size: size * 0.52, tint: style.tint)
+        let size: CGFloat = theme.chipStyle == .none ? 26 : 38
+        if content.icon != nil, case .symbol = content.icon {
+            chipped(size: size) {
+                ActivityIconView(
+                    icon: content.icon,
+                    size: theme.chipStyle == .none ? size : size * 0.52,
+                    tint: style.glyphColor(theme)
+                )
             }
         } else if content.icon != nil {
-            Artwork(icon: content.icon, size: size, cornerRadius: size * 0.26)
+            Artwork(icon: content.icon, size: 38, cornerRadius: 38 * 0.26)
         } else {
-            IconChip(tint: style.tint, size: size) {
+            chipped(size: size) {
                 Circle()
-                    .fill(style.tint)
+                    .fill(style.accentColor)
                     .frame(width: size * 0.22, height: size * 0.22)
             }
         }
     }
 
+    /// The container an activity's mark sits in, which each theme answers
+    /// differently — from a tinted chip down to nothing at all.
+    @ViewBuilder
+    private func chipped<Content: View>(
+        size: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        switch theme.chipStyle {
+        case .tinted:
+            IconChip(tint: style.tint, size: size, content: content)
+        case .neutral:
+            content()
+                .frame(width: size, height: size)
+                .background {
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.75)
+                }
+        case .glass:
+            content()
+                .frame(width: size, height: size)
+                .background {
+                    RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.75)
+                }
+        case .none:
+            content()
+        }
+    }
+
     private func details(_ rows: [ActivityDetail]) -> some View {
-        VStack(spacing: 0) {
+        let showsRules = theme.detailStyle == .rules || theme.detailStyle == .grouped
+        return VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, detail in
-                if index > 0 {
+                if index > 0, showsRules {
                     Rectangle()
                         .fill(IslandDesign.Ink.separator)
                         .frame(height: 0.5)
@@ -300,13 +352,28 @@ public struct ExpandedView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-                .padding(.vertical, IslandDesign.space(1.25))
+                .padding(.vertical, theme.detailStyle == .plain ? 3.5 : IslandDesign.space(1.25))
             }
         }
-        .padding(.horizontal, IslandDesign.space(2.5))
-        .background {
+        .padding(.horizontal, theme.detailStyle == .plain ? 0 : IslandDesign.space(2.5))
+        .background { detailBackground }
+    }
+
+    @ViewBuilder
+    private var detailBackground: some View {
+        switch theme.detailStyle {
+        case .grouped:
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.white.opacity(0.045))
+        case .glass:
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
+                }
+        case .rules, .plain:
+            Color.clear
         }
     }
 
@@ -324,7 +391,13 @@ public struct ExpandedView: View {
                         Text(action.title)
                     }
                 }
-                .buttonStyle(IslandButtonStyle(tint: style.tint, isDestructive: action.isDestructive))
+                .buttonStyle(
+                    IslandButtonStyle(
+                        tint: style.tint,
+                        isDestructive: action.isDestructive,
+                        kind: theme.actionStyle
+                    )
+                )
             }
             Spacer(minLength: 0)
         }

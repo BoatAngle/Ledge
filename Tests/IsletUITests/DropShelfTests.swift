@@ -89,3 +89,35 @@ final class SplitLayoutTests: XCTestCase {
                        "Body centre must coincide with the footprint centre")
     }
 }
+
+final class IslandThemeTests: XCTestCase {
+    func testEveryThemeIDHasAPreset() {
+        for id in IslandThemeID.allCases {
+            XCTAssertEqual(IslandTheme.preset(id).id, id)
+        }
+    }
+
+    /// The quieter themes strip `.fill` so modules don't have to know about
+    /// themes — but only where an unfilled twin actually exists.
+    func testSymbolVariantsFollowTheTheme() {
+        XCTAssertEqual(IslandTheme.vivid.symbolName("bolt.fill"), "bolt.fill")
+        XCTAssertEqual(IslandTheme.system.symbolName("bolt.fill"), "bolt")
+        XCTAssertEqual(IslandTheme.system.symbolName("timer"), "timer")
+    }
+
+    func testSymbolsWithNoUnfilledTwinKeepTheirFill() {
+        // `capslock.fill` has a twin; a made-up one must not become a blank box.
+        let invented = "not.a.real.symbol.fill"
+        XCTAssertEqual(IslandTheme.system.symbolName(invented), invented)
+    }
+
+    /// Sparing themes keep glyphs monochrome but must still colour anything
+    /// that encodes state — that's what the accent is for.
+    func testAccentUsageSeparatesGlyphsFromState() {
+        let style = ActivityStyle(tint: .red)
+        XCTAssertEqual(style.glyphColor(.vivid), style.tint)
+        XCTAssertNotEqual(style.glyphColor(.system), style.tint)
+        XCTAssertEqual(style.accentColor, style.tint, "State colour is never suppressed")
+        XCTAssertEqual(style.glow(.editorial), 0)
+    }
+}

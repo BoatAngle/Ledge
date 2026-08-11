@@ -105,14 +105,23 @@ public struct WaveformView: View {
 
 /// Determinate or indeterminate progress, drawn as a thin capsule track.
 public struct IslandProgressBar: View {
+    @Environment(\.islandTheme) private var theme
     public var progress: ActivityProgress
     public var tint: Color
-    public var height: CGFloat = 5
+    public var height: CGFloat?
 
-    public init(progress: ActivityProgress, tint: Color, height: CGFloat = 5) {
+    public init(progress: ActivityProgress, tint: Color, height: CGFloat? = nil) {
         self.progress = progress
         self.tint = tint
         self.height = height
+    }
+
+    private var resolvedHeight: CGFloat { height ?? theme.progressHeight }
+
+    private var fill: AnyShapeStyle {
+        theme.progressUsesGradient
+            ? AnyShapeStyle(IslandDesign.tintGradient(tint))
+            : AnyShapeStyle(tint)
     }
 
     public var body: some View {
@@ -129,23 +138,31 @@ public struct IslandProgressBar: View {
                     }
                 if let fraction = progress.fraction {
                     Capsule()
-                        .fill(IslandDesign.tintGradient(tint))
-                        .frame(width: max(height, proxy.size.width * fraction))
-                        .shadow(color: tint.opacity(0.45), radius: 3)
+                        .fill(fill)
+                        .frame(width: max(resolvedHeight, proxy.size.width * fraction))
+                        .shadow(
+                            color: tint.opacity(theme.progressUsesGradient ? 0.45 : 0),
+                            radius: 3
+                        )
                         .animation(IslandMotion.content, value: fraction)
                 } else {
-                    IndeterminateSweep(tint: tint, width: proxy.size.width)
+                    IndeterminateSweep(
+                        tint: tint,
+                        width: proxy.size.width,
+                        usesGradient: theme.progressUsesGradient
+                    )
                 }
             }
             .clipShape(Capsule())
         }
-        .frame(height: height)
+        .frame(height: resolvedHeight)
     }
 }
 
 private struct IndeterminateSweep: View {
     var tint: Color
     var width: CGFloat
+    var usesGradient: Bool = true
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
@@ -156,9 +173,11 @@ private struct IndeterminateSweep: View {
             // with a visible seam.
             let eased = (1 - cos(t * 2 * .pi)) / 2
             Capsule()
-                .fill(IslandDesign.tintGradient(tint))
+                .fill(usesGradient
+                      ? AnyShapeStyle(IslandDesign.tintGradient(tint))
+                      : AnyShapeStyle(tint))
                 .frame(width: segment)
-                .shadow(color: tint.opacity(0.4), radius: 3)
+                .shadow(color: tint.opacity(usesGradient ? 0.4 : 0), radius: 3)
                 .offset(x: eased * (width - segment))
         }
     }

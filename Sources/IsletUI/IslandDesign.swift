@@ -229,40 +229,59 @@ public struct IconChip<Content: View>: View {
     }
 }
 
-/// Pill button used in the expanded panel.
+/// Action button in the expanded panel, in whichever form the theme calls for.
 public struct IslandButtonStyle: ButtonStyle {
     public var tint: Color
     public var isDestructive: Bool
+    public var kind: ActionStyle
 
-    public init(tint: Color, isDestructive: Bool = false) {
+    public init(tint: Color, isDestructive: Bool = false, kind: ActionStyle = .filled) {
         self.tint = tint
         self.isDestructive = isDestructive
+        self.kind = kind
     }
 
     public func makeBody(configuration: Configuration) -> some View {
         let accent = isDestructive ? Color.red : IslandDesign.Ink.primary
         configuration.label
             .font(IslandDesign.Text.button)
-            .foregroundStyle(accent)
-            .padding(.horizontal, 13)
-            .padding(.vertical, 7)
-            .background {
-                Capsule(style: .continuous)
-                    .fill(isDestructive
-                          ? Color.red.opacity(0.18)
-                          : IslandDesign.Ink.controlFill)
-            }
-            .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(
-                        isDestructive
-                            ? Color.red.opacity(0.24)
-                            : IslandDesign.Ink.controlStroke,
-                        lineWidth: 0.75
-                    )
-            }
+            .foregroundStyle(kind == .plain && !isDestructive ? tint : accent)
+            .padding(.horizontal, kind == .plain ? 0 : 13)
+            .padding(.vertical, kind == .plain ? 2 : 7)
+            .background { background }
+            .overlay { border }
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .opacity(configuration.isPressed ? 0.75 : 1)
             .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        switch kind {
+        case .filled:
+            Capsule(style: .continuous)
+                .fill(isDestructive ? Color.red.opacity(0.18) : IslandDesign.Ink.controlFill)
+        case .glass:
+            Capsule(style: .continuous).fill(.ultraThinMaterial)
+        case .bordered, .plain:
+            Color.clear
+        }
+    }
+
+    @ViewBuilder
+    private var border: some View {
+        switch kind {
+        case .filled, .bordered:
+            Capsule(style: .continuous)
+                .strokeBorder(
+                    isDestructive ? Color.red.opacity(0.24) : IslandDesign.Ink.controlStroke,
+                    lineWidth: 0.75
+                )
+        case .glass:
+            Capsule(style: .continuous)
+                .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.75)
+        case .plain:
+            Color.clear
+        }
     }
 }

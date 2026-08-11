@@ -43,6 +43,8 @@ public struct IslandRootView: View {
     private var composition: IslandComposition { store.composition }
     private var mode: IslandMode { composition.mode }
 
+    private var theme: IslandTheme { .preset(settings.theme) }
+
     /// Colour and size for an activity, after the user's per-module overrides.
     private func style(for activity: Activity?) -> ActivityStyle {
         // Read the revision so `@Observable` registers a dependency: the
@@ -126,9 +128,11 @@ public struct IslandRootView: View {
                 bodySize: bodySize,
                 minimalFrame: minimalFrame,
                 topFillet: fillet,
-                bottomRadius: IslandGeometry.bottomRadius(for: mode, metrics: metrics),
+                bottomRadius: IslandGeometry.bottomRadius(for: mode, metrics: metrics)
+                    * theme.bottomRadiusScale,
                 goo: goo.radius,
-                hasDepth: mode != .idle
+                hasDepth: mode != .idle,
+                opaqueTopHeight: metrics.notchSize.height
             )
             .islandShadow(shadowSpec)
             .offset(x: leadingReserve)
@@ -169,6 +173,7 @@ public struct IslandRootView: View {
             guard height > 0 else { return }
             measuredPanelHeight = height
         }
+        .islandTheme(theme)
     }
 
     // MARK: Content per mode

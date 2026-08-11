@@ -44,6 +44,7 @@ final class IconCache {
 
 /// Draws an activity's icon at a given size, tinted when it's a symbol.
 public struct ActivityIconView: View {
+    @Environment(\.islandTheme) private var theme
     public var icon: ActivityIcon?
     public var size: CGFloat
     public var tint: Color
@@ -58,8 +59,8 @@ public struct ActivityIconView: View {
         Group {
             switch icon {
             case .symbol(let name):
-                Image(systemName: name)
-                    .font(.system(size: size * 0.72, weight: .semibold))
+                Image(systemName: theme.symbolName(name))
+                    .font(.system(size: size * 0.72, weight: theme.glyphWeight))
                     .foregroundStyle(tint)
                     .frame(width: size, height: size)
             case .some(let other):

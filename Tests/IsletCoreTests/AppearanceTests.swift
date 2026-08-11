@@ -114,3 +114,22 @@ final class AppearanceSchedulingTests: XCTestCase {
         XCTAssertEqual(store.composition.primary?.id, "a")
     }
 }
+
+final class IslandThemeIDTests: XCTestCase {
+    func testEveryThemeIsDescribed() {
+        // The settings picker renders these; an empty one would ship a blank row.
+        for id in IslandThemeID.allCases {
+            XCTAssertFalse(id.label.isEmpty, "\(id) has no label")
+            XCTAssertFalse(id.explanation.isEmpty, "\(id) has no explanation")
+        }
+    }
+
+    func testRawValuesAreStableForPersistence() {
+        // These strings land in UserDefaults; renaming a case silently resets
+        // everyone's theme to the default.
+        XCTAssertEqual(IslandThemeID.system.rawValue, "system")
+        XCTAssertEqual(IslandThemeID.vivid.rawValue, "vivid")
+        XCTAssertEqual(IslandThemeID.glass.rawValue, "glass")
+        XCTAssertEqual(IslandThemeID.editorial.rawValue, "editorial")
+    }
+}

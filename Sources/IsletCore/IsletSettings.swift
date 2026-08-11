@@ -103,6 +103,14 @@ public final class IsletSettings {
         didSet { defaults.set(animateArrivals, forKey: Keys.animateArrivals) }
     }
 
+    /// The island's overall visual direction.
+    public var theme: IslandThemeID {
+        didSet {
+            defaults.set(theme.rawValue, forKey: Keys.theme)
+            NotificationCenter.default.post(name: .isletAppearanceChanged, object: nil)
+        }
+    }
+
     // MARK: Weather
 
     public var weatherMode: WeatherMode {
@@ -143,6 +151,8 @@ public final class IsletSettings {
         hoverDelay = defaults.object(forKey: Keys.hoverDelay) as? Double ?? 220
         showOnNotchlessDisplays = defaults.object(forKey: Keys.showOnNotchless) as? Bool ?? true
         animateArrivals = defaults.object(forKey: Keys.animateArrivals) as? Bool ?? true
+        theme = (defaults.string(forKey: Keys.theme)
+            .flatMap(IslandThemeID.init(rawValue:))) ?? .vivid
 
         // On-demand rather than always-visible by default. A permanent readout
         // would mean the island is never actually idle, and "invisible until
@@ -221,6 +231,7 @@ public final class IsletSettings {
         hoverDelay = 220
         showOnNotchlessDisplays = true
         animateArrivals = true
+        theme = .vivid
         weatherMode = .onDemand
         temperatureUnit = .localeDefault
         weatherLocationMode = .automatic
@@ -238,6 +249,7 @@ public final class IsletSettings {
         static let hoverDelay = "interaction.hoverDelay"
         static let showOnNotchless = "interaction.showOnNotchlessDisplays"
         static let animateArrivals = "interaction.animateArrivals"
+        static let theme = "island.theme"
         static let weatherMode = "weather.mode"
         static let temperatureUnit = "weather.temperatureUnit"
         static let weatherLocationMode = "weather.locationMode"
@@ -258,8 +270,46 @@ public final class IsletSettings {
 
         static let all = [
             expandOnHover, hoverDelay, showOnNotchless, animateArrivals,
-            weatherMode, temperatureUnit, weatherLocationMode,
+            theme, weatherMode, temperatureUnit, weatherLocationMode,
             manualLatitude, manualLongitude, manualPlaceName, weatherAlerts,
         ]
+    }
+}
+
+/// The island's overall visual direction.
+///
+/// A theme is a coherent set of choices — material, glyph treatment, how much
+/// colour is used, type scale — not a colour swap. Each one is meant to be
+/// defensible on its own terms rather than a slider position between the others.
+public enum IslandThemeID: String, Codable, CaseIterable, Sendable {
+    /// Restrained, reads as part of macOS chrome.
+    case system
+    /// Saturated and confident, closest to Apple's own Dynamic Island.
+    case vivid
+    /// Translucent materials and specular edges.
+    case glass
+    /// Type-led and quiet, hairline rules instead of filled containers.
+    case editorial
+
+    public var label: String {
+        switch self {
+        case .system: return "System"
+        case .vivid: return "Vivid"
+        case .glass: return "Glass"
+        case .editorial: return "Editorial"
+        }
+    }
+
+    public var explanation: String {
+        switch self {
+        case .system:
+            return "Monochrome glyphs, colour only where it carries meaning. Sits quietly alongside the menu bar."
+        case .vivid:
+            return "Saturated, filled glyphs with a soft bloom. Closest to the iPhone's Dynamic Island."
+        case .glass:
+            return "Translucent panel over a frosted blur, with lit edges."
+        case .editorial:
+            return "Type first. Hairline rules, generous spacing, one restrained accent."
+        }
     }
 }
