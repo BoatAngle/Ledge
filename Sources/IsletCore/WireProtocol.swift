@@ -179,4 +179,11 @@ public extension Notification.Name {
     /// Lives in Core so providers can listen for their own buttons without
     /// depending on the UI layer.
     static let isletActionInvoked = Notification.Name("com.islet.actionInvoked")
+
+    /// Posted when per-module appearance changes, so the scheduler can re-sort.
+    ///
+    /// Slot and priority preferences feed into ordering, and ordering is only
+    /// recomputed when activities change — without this, dragging the position
+    /// slider would do nothing until the next thing happened.
+    static let isletAppearanceChanged = Notification.Name("com.islet.appearanceChanged")
 }

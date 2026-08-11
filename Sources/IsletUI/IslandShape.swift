@@ -78,7 +78,9 @@ public struct IslandSilhouette: View {
     public var topFillet: CGFloat
     public var bottomRadius: CGFloat
     public var goo: CGFloat
-    public var fill: Color
+    /// False at idle, where the island *is* the camera housing and any lift off
+    /// pure black would show as a seam against the bezel.
+    public var hasDepth: Bool
 
     /// Slack around the canvas so the blur has somewhere to bleed.
     private let pad: CGFloat = 30
@@ -89,14 +91,14 @@ public struct IslandSilhouette: View {
         topFillet: CGFloat,
         bottomRadius: CGFloat,
         goo: CGFloat = 0,
-        fill: Color = .black
+        hasDepth: Bool = true
     ) {
         self.bodySize = bodySize
         self.minimalFrame = minimalFrame
         self.topFillet = topFillet
         self.bottomRadius = bottomRadius
         self.goo = goo
-        self.fill = fill
+        self.hasDepth = hasDepth
     }
 
     /// Total footprint including the fillet flare and, in `.split`, the
@@ -107,31 +109,53 @@ public struct IslandSilhouette: View {
         return CGSize(width: contentWidth + topFillet * 2, height: contentHeight)
     }
 
+    /// Width of the notch-shaped body including its fillet flare.
+    private var bodyFootprintWidth: CGFloat { bodySize.width + topFillet * 2 }
+
     public var body: some View {
+        ZStack(alignment: .topLeading) {
+            // The metaball pass produces a silhouette; that silhouette then
+            // masks the surface gradient. Filling the canvas with a gradient
+            // directly isn't possible — `alphaThreshold` works on a flat colour
+            // — so the mask is what lets the shape have depth *and* merge like
+            // liquid.
+            Rectangle()
+                .fill(IslandDesign.surfaceFill(liftsAtBottom: hasDepth))
+                .mask(alignment: .topLeading) { silhouetteMask }
+
+            if hasDepth, goo <= 0.2 {
+                rim
+            }
+        }
+        .frame(width: footprint.width, height: footprint.height, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+
+    private var silhouetteMask: some View {
         Canvas { context, _ in
             if goo > 0.2 {
                 // Added first so it runs last: blur smears the two forms into
                 // one blob, then the threshold snaps that blob back to a hard
                 // edge — the classic metaball recipe.
-                context.addFilter(.alphaThreshold(min: 0.5, color: fill))
+                context.addFilter(.alphaThreshold(min: 0.5, color: .black))
                 context.addFilter(.blur(radius: goo))
             }
             context.drawLayer { layer in
                 let body = CGRect(
                     x: pad,
                     y: pad,
-                    width: bodySize.width + topFillet * 2,
+                    width: bodyFootprintWidth,
                     height: bodySize.height
                 )
                 layer.fill(
                     NotchShape(topFillet: topFillet, bottomRadius: bottomRadius).path(in: body),
-                    with: .color(fill)
+                    with: .color(.black)
                 )
                 if var circle = minimalFrame {
                     // Minimal frames are expressed relative to the body's
                     // origin, which sits inside the fillet flare.
                     circle = circle.offsetBy(dx: pad + topFillet, dy: pad)
-                    layer.fill(Path(ellipseIn: circle), with: .color(fill))
+                    layer.fill(Path(ellipseIn: circle), with: .color(.black))
                 }
             }
         }
@@ -140,6 +164,21 @@ public struct IslandSilhouette: View {
             height: footprint.height + pad * 2
         )
         .offset(x: -pad, y: -pad)
-        .allowsHitTesting(false)
+    }
+
+    /// The lit lower edge. Suppressed mid-morph, where a stroke tracing a
+    /// stretching blob reads as an outline rather than a highlight.
+    @ViewBuilder
+    private var rim: some View {
+        NotchShape(topFillet: topFillet, bottomRadius: bottomRadius)
+            .stroke(IslandDesign.rimHighlight, lineWidth: IslandDesign.rimWidth)
+            .frame(width: bodyFootprintWidth, height: bodySize.height)
+
+        if let minimalFrame {
+            Circle()
+                .stroke(IslandDesign.rimHighlight, lineWidth: IslandDesign.rimWidth)
+                .frame(width: minimalFrame.width, height: minimalFrame.height)
+                .offset(x: topFillet + minimalFrame.minX, y: minimalFrame.minY)
+        }
     }
 }

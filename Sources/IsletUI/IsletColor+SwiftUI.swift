@@ -1,3 +1,4 @@
+import AppKit
 import IsletCore
 import SwiftUI
 
@@ -15,6 +16,21 @@ public extension Color {
 
 public extension IsletColor {
     var swiftUIColor: Color { Color(self) }
+
+    /// Converts back from SwiftUI, for the custom colour well in Settings.
+    ///
+    /// Goes through sRGB explicitly: `NSColor` from a SwiftUI `Color` can land
+    /// in a device or catalog space whose components mean something different,
+    /// and the island stores plain sRGB numbers.
+    init?(_ color: Color) {
+        guard let srgb = NSColor(color).usingColorSpace(.sRGB) else { return nil }
+        self.init(
+            red: Double(srgb.redComponent),
+            green: Double(srgb.greenComponent),
+            blue: Double(srgb.blueComponent),
+            alpha: Double(srgb.alphaComponent)
+        )
+    }
 }
 
 /// Shared palette for the island's chrome, so every module agrees on what

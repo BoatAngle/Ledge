@@ -29,6 +29,13 @@ public final class ActivityStore {
     /// attention bounce rather than a silent geometry change.
     private(set) public var lastArrivalID: String?
 
+    /// Per-module appearance lookup, supplied by the app.
+    ///
+    /// Injected rather than read from settings directly so `IsletCore` stays
+    /// free of any particular settings implementation, and so tests can drive
+    /// the scheduler without touching `UserDefaults`.
+    public var appearanceForModule: (@MainActor (String) -> ModuleAppearance)?
+
     private var reaper: Timer?
 
     public init() {
@@ -105,6 +112,7 @@ public final class ActivityStore {
     public func flash(
         id: String,
         nativeView: NativeViewKind? = nil,
+        module: String? = nil,
         content: ActivityContent,
         priority: ActivityPriority = .system,
         dwell: TimeInterval = ActivityStore.transientDwell
@@ -117,10 +125,20 @@ public final class ActivityStore {
                 priority: priority,
                 content: content,
                 nativeView: nativeView,
+                module: module,
                 expiresAt: Date().addingTimeInterval(dwell),
                 isExpandable: false
             )
         )
+    }
+
+    /// Re-resolve the composition without any activity having changed.
+    ///
+    /// Needed when the *rules* change rather than the data — per-module slot
+    /// and priority preferences feed the sort, so editing them has to trigger a
+    /// pass or nothing moves until the next activity arrives.
+    public func refresh() {
+        recompose()
     }
 
     // MARK: - Scheduling
@@ -133,9 +151,9 @@ public final class ActivityStore {
         let live = activities.values
             .filter { !$0.isExpired(at: now) }
             .sorted { lhs, rhs in
-                if lhs.effectivePriority != rhs.effectivePriority {
-                    return lhs.effectivePriority > rhs.effectivePriority
-                }
+                let left = effectivePriority(of: lhs)
+                let right = effectivePriority(of: rhs)
+                if left != right { return left > right }
                 // Newer first, so the most recent thing to happen leads.
                 return lhs.updatedAt > rhs.updatedAt
             }
@@ -172,6 +190,13 @@ public final class ActivityStore {
             mode: mode,
             all: live
         )
+    }
+
+    private func effectivePriority(of activity: Activity) -> Int {
+        guard let module = activity.module, let appearanceForModule else {
+            return activity.effectivePriority()
+        }
+        return activity.effectivePriority(appearanceForModule(module))
     }
 
     // MARK: - Expiry

@@ -94,3 +94,62 @@ final class IsletSettingsTests: XCTestCase {
         XCTAssertTrue([.celsius, .fahrenheit].contains(TemperatureUnit.localeDefault))
     }
 }
+
+@MainActor
+final class AppearanceSettingsTests: XCTestCase {
+    private var suiteName: String!
+    private var defaults: UserDefaults!
+
+    override func setUp() {
+        super.setUp()
+        suiteName = "dev.islet.tests.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)
+    }
+
+    override func tearDown() {
+        defaults.removePersistentDomain(forName: suiteName)
+        super.tearDown()
+    }
+
+    func testAppearanceDefaultsAndPersists() {
+        let settings = IsletSettings(defaults: defaults)
+        XCTAssertTrue(settings.appearance(for: "system.media").isDefault)
+
+        settings.setAppearance(
+            ModuleAppearance(tint: .purple, scale: 1.1, slot: .minimal),
+            for: "system.media"
+        )
+
+        let reloaded = IsletSettings(defaults: defaults)
+        let stored = reloaded.appearance(for: "system.media")
+        XCTAssertEqual(stored.tint, .purple)
+        XCTAssertEqual(stored.scale, 1.1, accuracy: 0.001)
+        XCTAssertEqual(stored.slot, .minimal)
+        XCTAssertTrue(reloaded.appearance(for: "system.timer").isDefault, "Others unaffected")
+    }
+
+    /// Storing nothing for a default keeps future changes to what "default"
+    /// means reaching anyone who never customised the module.
+    func testSettingBackToDefaultRemovesTheStoredValue() {
+        let settings = IsletSettings(defaults: defaults)
+        settings.setAppearance(ModuleAppearance(scale: 1.2), for: "system.media")
+        XCTAssertNotNil(defaults.data(forKey: "appearance.system.media"))
+
+        settings.setAppearance(.default, for: "system.media")
+        XCTAssertNil(defaults.data(forKey: "appearance.system.media"))
+    }
+
+    func testAppearanceChangeBumpsTheObservableRevision() {
+        let settings = IsletSettings(defaults: defaults)
+        let before = settings.appearanceRevision
+        settings.setAppearance(ModuleAppearance(scale: 1.2), for: "system.media")
+        XCTAssertNotEqual(settings.appearanceRevision, before)
+    }
+
+    func testResetClearsAppearance() {
+        let settings = IsletSettings(defaults: defaults)
+        settings.setAppearance(ModuleAppearance(tint: .red), for: "system.media")
+        settings.resetToDefaults()
+        XCTAssertTrue(settings.appearance(for: "system.media").isDefault)
+    }
+}

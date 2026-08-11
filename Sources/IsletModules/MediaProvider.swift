@@ -217,6 +217,7 @@ public final class MediaProvider: SystemProvider {
                 priority: .normal,
                 content: content(for: snapshot),
                 nativeView: .media,
+                module: identifier,
                 isExpandable: true,
                 openURL: nil
             )

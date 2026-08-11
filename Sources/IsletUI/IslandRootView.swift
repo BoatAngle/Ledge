@@ -43,6 +43,18 @@ public struct IslandRootView: View {
     private var composition: IslandComposition { store.composition }
     private var mode: IslandMode { composition.mode }
 
+    /// Colour and size for an activity, after the user's per-module overrides.
+    private func style(for activity: Activity?) -> ActivityStyle {
+        // Read the revision so `@Observable` registers a dependency: the
+        // appearance itself lives in UserDefaults, which observation can't see,
+        // and without this the island keeps its old colours until something
+        // else forces a redraw.
+        _ = settings.appearanceRevision
+        guard let activity else { return .placeholder }
+        let appearance = activity.module.map { settings.appearance(for: $0) }
+        return ActivityStyle.resolve(activity, appearance: appearance)
+    }
+
     /// The panel's height, taken from what the content actually measured.
     ///
     /// Estimating this from a table of constants was always going to drift the
@@ -86,6 +98,16 @@ public struct IslandRootView: View {
         mode == .split ? IslandGeometry.splitGap + IslandGeometry.minimalDiameter : 0
     }
 
+    /// Idle casts nothing — a shadow under the camera housing would give the
+    /// whole illusion away.
+    private var shadowSpec: IslandDesign.ShadowSpec {
+        switch mode {
+        case .idle: return .none
+        case .expanded: return .raised
+        case .compact, .split: return .resting
+        }
+    }
+
     private var footprint: CGSize {
         CGSize(
             width: totalSize.width + fillet * 2 + leadingReserve,
@@ -105,9 +127,10 @@ public struct IslandRootView: View {
                 minimalFrame: minimalFrame,
                 topFillet: fillet,
                 bottomRadius: IslandGeometry.bottomRadius(for: mode, metrics: metrics),
-                goo: goo.radius
+                goo: goo.radius,
+                hasDepth: mode != .idle
             )
-            .shadow(color: .black.opacity(mode == .expanded ? 0.5 : 0.28), radius: 14, y: 6)
+            .islandShadow(shadowSpec)
             .offset(x: leadingReserve)
 
             content
@@ -115,7 +138,11 @@ public struct IslandRootView: View {
                 .offset(x: fillet + leadingReserve)
 
             if let minimalFrame, let secondary = composition.secondary {
-                MinimalView(activity: secondary, diameter: minimalFrame.width)
+                MinimalView(
+                    activity: secondary,
+                    diameter: minimalFrame.width,
+                    style: style(for: secondary)
+                )
                     .offset(x: fillet + leadingReserve + minimalFrame.minX, y: minimalFrame.minY)
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
@@ -164,6 +191,7 @@ public struct IslandRootView: View {
                     ExpandedView(
                         activity: activity,
                         siblings: composition.all,
+                        style: style(for: activity),
                         onSelect: { store.focusedActivityID = $0 },
                         onAction: { perform($0) },
                         onDismiss: { collapse() }
@@ -180,7 +208,11 @@ public struct IslandRootView: View {
         HStack(spacing: 0) {
             Group {
                 if let primary = composition.primary {
-                    CompactLeadingView(activity: primary, height: height)
+                    CompactLeadingView(
+                        activity: primary,
+                        height: height,
+                        style: style(for: primary)
+                    )
                 }
             }
             .frame(width: sidePadding(for: bodySize.width), height: height)
@@ -189,7 +221,11 @@ public struct IslandRootView: View {
 
             Group {
                 if let primary = composition.primary {
-                    CompactTrailingView(activity: primary, height: height)
+                    CompactTrailingView(
+                        activity: primary,
+                        height: height,
+                        style: style(for: primary)
+                    )
                 }
             }
             .frame(width: sidePadding(for: bodySize.width), height: height)

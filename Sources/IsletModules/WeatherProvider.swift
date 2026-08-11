@@ -189,6 +189,7 @@ public final class WeatherProvider: SystemProvider {
                 priority: .background,
                 content: content(for: snapshot),
                 nativeView: .weather,
+                module: identifier,
                 isExpandable: true
             )
         )
@@ -198,6 +199,7 @@ public final class WeatherProvider: SystemProvider {
         store?.flash(
             id: "weather.now",
             nativeView: .weather,
+            module: identifier,
             content: content(for: snapshot),
             priority: .normal,
             dwell: 4
@@ -208,6 +210,7 @@ public final class WeatherProvider: SystemProvider {
         store?.flash(
             id: "weather.now",
             nativeView: .weather,
+            module: identifier,
             content: ActivityContent(
                 title: "Weather unavailable",
                 subtitle: lastError,
@@ -223,6 +226,7 @@ public final class WeatherProvider: SystemProvider {
         store?.flash(
             id: "weather.alert",
             nativeView: .weather,
+            module: identifier,
             content: ActivityContent(
                 title: "\(snapshot.condition.summary) starting",
                 subtitle: placeName,

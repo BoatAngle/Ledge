@@ -105,7 +105,13 @@ func list() throws {
 
 /// `islet settings` — bring up the settings window.
 func openSettings() throws {
-    try client.send(IsletRequest(command: .settings, id: parsed.string("tab")))
+    try client.send(
+        IsletRequest(
+            command: .settings,
+            id: parsed.string("tab"),
+            source: parsed.string("customize")
+        )
+    )
     emit(["ok": true], plain: "opened")
 }
 
@@ -351,7 +357,9 @@ func printUsage() {
       timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
       shelf [files] Park files on the island to drag out later. No args clears.
       weather      Show current conditions on the island.
-      settings     Open the settings window. --tab general|modules|weather|about
+      settings     Open the settings window.
+                   --tab general|modules|weather|about
+                   --customize <module-id>  jump to a module's colour/size/position
       ping         Check that Islet.app is running.
 
     CONTENT

@@ -83,6 +83,7 @@ public final class PrivacyProvider: SystemProvider {
             store.flash(
                 id: "system.privacyStart",
                 nativeView: .privacy,
+                module: identifier,
                 content: ActivityContent(title: title, icon: .symbol(symbol), tint: tint),
                 priority: .high,
                 dwell: 2.0
@@ -104,6 +105,7 @@ public final class PrivacyProvider: SystemProvider {
                     tint: tint
                 ),
                 nativeView: .privacy,
+                module: identifier,
                 isExpandable: true
             )
         )

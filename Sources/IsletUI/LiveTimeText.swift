@@ -107,9 +107,9 @@ public struct WaveformView: View {
 public struct IslandProgressBar: View {
     public var progress: ActivityProgress
     public var tint: Color
-    public var height: CGFloat = 4
+    public var height: CGFloat = 5
 
-    public init(progress: ActivityProgress, tint: Color, height: CGFloat = 4) {
+    public init(progress: ActivityProgress, tint: Color, height: CGFloat = 5) {
         self.progress = progress
         self.tint = tint
         self.height = height
@@ -118,16 +118,26 @@ public struct IslandProgressBar: View {
     public var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.16))
+                Capsule()
+                    .fill(IslandDesign.Ink.trackFill)
+                    // A hairline along the top of the track reads as a recess
+                    // rather than a painted stripe.
+                    .overlay(alignment: .top) {
+                        Capsule()
+                            .fill(Color.black.opacity(0.35))
+                            .frame(height: 0.5)
+                    }
                 if let fraction = progress.fraction {
                     Capsule()
-                        .fill(tint)
+                        .fill(IslandDesign.tintGradient(tint))
                         .frame(width: max(height, proxy.size.width * fraction))
+                        .shadow(color: tint.opacity(0.45), radius: 3)
                         .animation(IslandMotion.content, value: fraction)
                 } else {
                     IndeterminateSweep(tint: tint, width: proxy.size.width)
                 }
             }
+            .clipShape(Capsule())
         }
         .frame(height: height)
     }
@@ -146,8 +156,9 @@ private struct IndeterminateSweep: View {
             // with a visible seam.
             let eased = (1 - cos(t * 2 * .pi)) / 2
             Capsule()
-                .fill(tint)
+                .fill(IslandDesign.tintGradient(tint))
                 .frame(width: segment)
+                .shadow(color: tint.opacity(0.4), radius: 3)
                 .offset(x: eased * (width - segment))
         }
     }
@@ -167,12 +178,13 @@ public struct IslandProgressRing: View {
 
     public var body: some View {
         ZStack {
-            Circle().stroke(Color.white.opacity(0.18), lineWidth: lineWidth)
+            Circle().stroke(IslandDesign.Ink.trackFill, lineWidth: lineWidth)
             if let fraction {
                 Circle()
                     .trim(from: 0, to: max(0.001, fraction))
                     .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
+                    .shadow(color: tint.opacity(0.55), radius: 2.5)
                     .animation(IslandMotion.content, value: fraction)
             } else {
                 SpinningArc(tint: tint, lineWidth: lineWidth)
@@ -191,6 +203,7 @@ private struct SpinningArc: View {
             Circle()
                 .trim(from: 0, to: 0.28)
                 .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .shadow(color: tint.opacity(0.55), radius: 2.5)
                 .rotationEffect(.degrees(angle))
         }
     }

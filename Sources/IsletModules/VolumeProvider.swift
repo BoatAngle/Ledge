@@ -97,6 +97,7 @@ public final class VolumeProvider: SystemProvider {
         store.flash(
             id: identifier,
             nativeView: .volume,
+            module: identifier,
             content: ActivityContent(
                 title: muted ? "Muted" : "Volume",
                 icon: .symbol(Self.speakerSymbol(volume: volume, muted: muted)),
@@ -114,6 +115,7 @@ public final class VolumeProvider: SystemProvider {
         store.flash(
             id: "system.audioDevice",
             nativeView: .volume,
+            module: identifier,
             content: ActivityContent(
                 title: name,
                 subtitle: "Connected",

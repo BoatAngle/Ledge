@@ -33,6 +33,13 @@ the shapes stretch apart like liquid instead of snapping. Concave fillets join
 the island to the top bezel, which is what sells it as carved out of the display
 rather than pasted on top.
 
+The surface treatment works around one hard constraint: the island overlaps the
+physical camera housing, so its upper region has to be indistinguishable from
+the bezel. All the depth — the surface gradient, the specular rim, the layered
+contact-and-ambient shadows — originates at the bottom edge and falls away
+downward. At idle it's suppressed entirely, because the island *is* the notch
+and any deviation from true black would show as a seam.
+
 Works on notchless Macs and external monitors too — it draws a virtual island of
 the same dimensions.
 
@@ -54,6 +61,28 @@ the same dimensions.
 Everything stands down while the machine is locked or the display is asleep. A
 settings window covers all of it — General, Modules, Weather, About — reachable
 from the menu bar, `⌘,`, or `islet settings`.
+
+## Making it yours
+
+Every module takes a colour, a size, and a position, edited against a **live
+island preview** built from the real silhouette and the real compact views — so
+what you tune is genuinely what you get.
+
+```bash
+islet settings --customize system.media
+```
+
+- **Colour** — the system palette or any custom colour.
+- **Size** — scales that module's glyph and readout from 80% to 125%. The island
+  keeps its own dimensions so it stays lined up with the camera.
+- **Position** — *Automatic*, *Prefer front*, or *Prefer the small circle*, plus
+  an ordering nudge. Placement is expressed as priority bias rather than a
+  second layout pass: "prefer the small circle" *is* "rank below whatever else
+  is live", and one ordering rule is far easier to reason about than two.
+
+Deliberately a closed set. Arbitrary fonts and spacing would let anyone build
+something that stops looking like the island; colour, size and placement cover
+what people actually want without letting the design come apart.
 
 Weather defaults to **on demand** rather than always-visible: a permanent
 readout would mean the island is never idle, and "invisible until something
@@ -167,6 +196,11 @@ look.
 Providers degrade quietly. If an API is missing or a permission is declined, the
 module reports `isAvailable == false` and disappears from the menu. Nothing is a
 hard failure.
+
+`IslandDesign` holds the visual vocabulary — spacing rhythm, type ramp, surface
+and shadow specs, glyph glow, icon chips, button style. Presentations compose
+from it rather than carrying their own point sizes, so the look stays coherent
+as modules are added.
 
 ## Permissions
 

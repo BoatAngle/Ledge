@@ -86,6 +86,7 @@ public final class FocusProvider: SystemProvider {
             store.flash(
                 id: "system.focusChange",
                 nativeView: .focus,
+                module: identifier,
                 content: ActivityContent(
                     title: "Focus Off",
                     icon: .symbol("moon.slash.fill"),
@@ -113,6 +114,7 @@ public final class FocusProvider: SystemProvider {
                     tint: IsletColor.indigo
                 ),
                 nativeView: .focus,
+                module: identifier,
                 isExpandable: true
             )
         )

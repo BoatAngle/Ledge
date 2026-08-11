@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.setModule(identifier, enabled: enabled)
         }
     )
+    private var appearanceObserver: NSObjectProtocol?
     private lazy var lockMonitor = LockMonitor { [weak self] isLocked in
         // Providers stand down while the machine is locked; activities already
         // on the island (a running timer, say) stay exactly where they were.
@@ -29,7 +30,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The scheduler consults per-module appearance for slot and priority
+        // nudges; it takes a closure so Core never learns about settings.
+        store.appearanceForModule = { [settings] identifier in
+            settings.appearance(for: identifier)
+        }
         windowController.show()
+
+        appearanceObserver = NotificationCenter.default.addObserver(
+            forName: .isletAppearanceChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.store.refresh() }
+        }
 
         // Providers start on the *next* run-loop turn, never inline here.
         //
@@ -52,8 +66,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             server.shelf = windowController.shelf
-            server.openSettings = { [weak self] tab in
-                self?.settingsWindow.show(tab: SettingsTab.named(tab))
+            server.openSettings = { [weak self] tab, customizing in
+                self?.settingsWindow.show(
+                    tab: customizing != nil ? .modules : SettingsTab.named(tab),
+                    customizing: customizing
+                )
             }
             try server.start()
         } catch {
@@ -67,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let appearanceObserver { NotificationCenter.default.removeObserver(appearanceObserver) }
         lockMonitor.stop()
         registry.stop()
         server.stop()

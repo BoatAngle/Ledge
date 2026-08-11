@@ -157,6 +157,7 @@ public final class BatteryProvider: SystemProvider {
         store.flash(
             id: identifier,
             nativeView: .battery,
+            module: identifier,
             content: ActivityContent(
                 title: title,
                 subtitle: subtitle,

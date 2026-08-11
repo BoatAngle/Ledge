@@ -143,6 +143,7 @@ public final class CalendarProvider: SystemProvider {
                     countdownTarget: hasStarted ? nil : event.startDate
                 ),
                 nativeView: .calendar,
+                module: identifier,
                 isExpandable: true
             )
         )

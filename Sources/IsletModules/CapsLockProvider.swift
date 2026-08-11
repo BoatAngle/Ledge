@@ -50,6 +50,7 @@ public final class CapsLockProvider: SystemProvider {
         store.flash(
             id: identifier,
             nativeView: .capsLock,
+            module: identifier,
             content: ActivityContent(
                 title: isOn ? "Caps Lock On" : "Caps Lock Off",
                 icon: .symbol(isOn ? "capslock.fill" : "capslock"),

@@ -1,86 +1,118 @@
 import IsletCore
 import SwiftUI
 
+/// An activity's resolved look, after the user's per-module overrides.
+public struct ActivityStyle: Equatable, Sendable {
+    public var tint: Color
+    public var scale: CGFloat
+
+    public init(tint: Color, scale: CGFloat = 1) {
+        self.tint = tint
+        self.scale = scale
+    }
+
+    /// Resolution order: the user's override, then whatever the module chose,
+    /// then the fallback accent.
+    public static func resolve(_ activity: Activity, appearance: ModuleAppearance?) -> ActivityStyle {
+        let tint = appearance?.tint.map(Color.init)
+            ?? activity.content.tint.map(Color.init)
+            ?? IslandDesign.Ink.primary.opacity(0.9)
+        return ActivityStyle(tint: tint, scale: CGFloat(appearance?.scale ?? 1))
+    }
+
+    public static let placeholder = ActivityStyle(tint: Color(IsletColor.accent))
+}
+
 // MARK: - Compact
 
-/// The glyph that sits left of the camera housing.
+/// The glyph left of the camera housing.
 ///
 /// Apple's compact presentation is deliberately wordless: two glyphs, no text.
-/// Anything that needs a sentence belongs in the expanded state, and resisting
-/// the urge to cram a title in here is most of what keeps it looking right.
+/// Anything needing a sentence belongs in the expanded state, and resisting the
+/// urge to cram a title in here is most of what keeps it looking right.
 public struct CompactLeadingView: View {
     public var activity: Activity
     public var height: CGFloat
+    public var style: ActivityStyle
 
-    public init(activity: Activity, height: CGFloat) {
+    public init(activity: Activity, height: CGFloat, style: ActivityStyle = .placeholder) {
         self.activity = activity
         self.height = height
-    }
-
-    private var tint: Color {
-        activity.content.tint.map(Color.init) ?? IslandPalette.defaultTint
+        self.style = style
     }
 
     public var body: some View {
-        let glyph = min(height - 12, 22)
+        let glyph = min(height - 12, 22) * style.scale
         Group {
             switch activity.nativeView {
             case .media:
-                ActivityIconView(icon: activity.content.icon, size: glyph + 2, tint: tint)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Artwork(icon: activity.content.icon, size: glyph + 3, cornerRadius: 5)
             case .privacy:
-                PrivacyDot(tint: tint, size: glyph * 0.5)
+                PrivacyDot(tint: style.tint, size: glyph * 0.46)
             case .some, .none:
-                ActivityIconView(icon: activity.content.icon, size: glyph, tint: tint)
+                ActivityIconView(icon: activity.content.icon, size: glyph, tint: style.tint)
+                    .glyphGlow(style.tint, radius: glyph * 0.34, intensity: 0.42)
             }
         }
-        .transition(.scale(scale: 0.6).combined(with: .opacity))
+        .transition(.scale(scale: 0.62).combined(with: .opacity))
     }
 }
 
-/// The glyph that sits right of the camera housing.
+/// The glyph right of the camera housing.
 public struct CompactTrailingView: View {
     public var activity: Activity
     public var height: CGFloat
+    public var style: ActivityStyle
 
-    public init(activity: Activity, height: CGFloat) {
+    public init(activity: Activity, height: CGFloat, style: ActivityStyle = .placeholder) {
         self.activity = activity
         self.height = height
-    }
-
-    private var tint: Color {
-        activity.content.tint.map(Color.init) ?? IslandPalette.defaultTint
+        self.style = style
     }
 
     public var body: some View {
         let content = activity.content
+        let metric = 12 * style.scale
         Group {
             if activity.nativeView == .media {
-                WaveformView(color: tint, isAnimating: true, size: CGSize(width: 18, height: height - 16))
+                WaveformView(
+                    color: style.tint,
+                    isAnimating: true,
+                    size: CGSize(width: 18 * style.scale, height: (height - 16) * style.scale)
+                )
             } else if content.countdownTarget != nil || content.countUpFrom != nil {
                 LiveTimeText(
                     target: content.countdownTarget,
                     countUpFrom: content.countUpFrom,
-                    font: .system(size: 12, weight: .semibold, design: .rounded),
-                    color: tint
+                    font: IslandDesign.Text.metric(metric),
+                    color: style.tint
                 )
+                .glyphGlow(style.tint, radius: 6, intensity: 0.3)
             } else if let text = content.trailingText {
                 Text(text)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(IslandDesign.Text.metric(metric))
                     .monospacedDigit()
-                    .foregroundStyle(tint)
+                    .foregroundStyle(style.tint)
                     .contentTransition(.numericText())
+                    .glyphGlow(style.tint, radius: 6, intensity: 0.3)
             } else if let icon = content.trailingIcon {
-                ActivityIconView(icon: icon, size: min(height - 12, 20), tint: tint)
+                ActivityIconView(
+                    icon: icon,
+                    size: min(height - 12, 20) * style.scale,
+                    tint: style.tint
+                )
+                .glyphGlow(style.tint, radius: 6, intensity: 0.4)
             } else if let progress = content.progress {
-                IslandProgressRing(fraction: progress.fraction, tint: tint)
-                    .frame(width: min(height - 14, 18), height: min(height - 14, 18))
+                IslandProgressRing(fraction: progress.fraction, tint: style.tint)
+                    .frame(
+                        width: min(height - 14, 18) * style.scale,
+                        height: min(height - 14, 18) * style.scale
+                    )
             } else {
-                // Nothing specific to say — a soft pulse still signals "live".
-                BreathingDot(tint: tint)
+                BreathingDot(tint: style.tint, size: 7 * style.scale)
             }
         }
-        .transition(.scale(scale: 0.6).combined(with: .opacity))
+        .transition(.scale(scale: 0.62).combined(with: .opacity))
     }
 }
 
@@ -90,26 +122,28 @@ public struct CompactTrailingView: View {
 public struct MinimalView: View {
     public var activity: Activity
     public var diameter: CGFloat
+    public var style: ActivityStyle
 
-    public init(activity: Activity, diameter: CGFloat) {
+    public init(activity: Activity, diameter: CGFloat, style: ActivityStyle = .placeholder) {
         self.activity = activity
         self.diameter = diameter
-    }
-
-    private var tint: Color {
-        activity.content.tint.map(Color.init) ?? IslandPalette.defaultTint
+        self.style = style
     }
 
     public var body: some View {
         Group {
             if activity.nativeView == .media {
-                ActivityIconView(icon: activity.content.icon, size: diameter - 8, tint: tint)
-                    .clipShape(Circle())
+                Artwork(icon: activity.content.icon, size: diameter - 8, cornerRadius: (diameter - 8) / 2)
             } else if let progress = activity.content.progress {
-                IslandProgressRing(fraction: progress.fraction, tint: tint, lineWidth: 2)
-                    .frame(width: diameter - 10, height: diameter - 10)
+                IslandProgressRing(fraction: progress.fraction, tint: style.tint, lineWidth: 2)
+                    .frame(width: diameter - 11, height: diameter - 11)
             } else {
-                ActivityIconView(icon: activity.content.icon, size: diameter - 13, tint: tint)
+                ActivityIconView(
+                    icon: activity.content.icon,
+                    size: (diameter - 13) * style.scale,
+                    tint: style.tint
+                )
+                .glyphGlow(style.tint, radius: 5, intensity: 0.45)
             }
         }
         .frame(width: diameter, height: diameter)
@@ -122,6 +156,7 @@ public struct MinimalView: View {
 public struct ExpandedView: View {
     public var activity: Activity
     public var siblings: [Activity]
+    public var style: ActivityStyle
     public var onSelect: (String) -> Void
     public var onAction: (ActivityAction) -> Void
     public var onDismiss: () -> Void
@@ -129,97 +164,57 @@ public struct ExpandedView: View {
     public init(
         activity: Activity,
         siblings: [Activity] = [],
+        style: ActivityStyle = .placeholder,
         onSelect: @escaping (String) -> Void = { _ in },
         onAction: @escaping (ActivityAction) -> Void = { _ in },
         onDismiss: @escaping () -> Void = {}
     ) {
         self.activity = activity
         self.siblings = siblings
+        self.style = style
         self.onSelect = onSelect
         self.onAction = onAction
         self.onDismiss = onDismiss
     }
 
-    private var tint: Color {
-        activity.content.tint.map(Color.init) ?? IslandPalette.defaultTint
-    }
-
     public var body: some View {
         let content = activity.content
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: IslandDesign.space(3)) {
             header(content)
 
             if let body = content.body {
                 Text(body)
-                    .font(.system(size: 12))
-                    .foregroundStyle(IslandPalette.secondaryText)
+                    .font(IslandDesign.Text.body)
+                    .foregroundStyle(IslandDesign.Ink.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             if let progress = content.progress {
-                VStack(alignment: .leading, spacing: 5) {
-                    IslandProgressBar(progress: progress, tint: tint)
+                VStack(alignment: .leading, spacing: IslandDesign.space(1.5)) {
+                    IslandProgressBar(progress: progress, tint: style.tint)
                     if let label = progress.label {
                         Text(label)
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundStyle(IslandPalette.tertiaryText)
+                            .font(IslandDesign.Text.caption)
+                            .foregroundStyle(IslandDesign.Ink.tertiary)
                     }
                 }
             }
 
             if !content.details.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(content.details.enumerated()), id: \.offset) { _, detail in
-                        HStack {
-                            Text(detail.label)
-                                .font(.system(size: 11))
-                                .foregroundStyle(IslandPalette.tertiaryText)
-                            Spacer(minLength: 12)
-                            Text(detail.value)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(IslandPalette.secondaryText)
-                                .monospacedDigit()
-                        }
-                    }
-                }
+                details(content.details)
             }
 
             if !content.actions.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(content.actions) { action in
-                        Button {
-                            onAction(action)
-                        } label: {
-                            HStack(spacing: 5) {
-                                if let symbol = action.symbol {
-                                    Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
-                                }
-                                Text(action.title).font(.system(size: 11, weight: .semibold))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule().fill(
-                                    action.isDestructive
-                                        ? Color.red.opacity(0.22)
-                                        : IslandPalette.controlFill
-                                )
-                            )
-                            .foregroundStyle(action.isDestructive ? Color.red : IslandPalette.primaryText)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Spacer(minLength: 0)
-                }
+                actions(content.actions)
             }
 
             if siblings.count > 1 {
                 switcher
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 16)
+        .padding(.horizontal, IslandDesign.panelHorizontalPadding)
+        .padding(.bottom, IslandDesign.panelBottomPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             // Report the panel's natural height so the island can size itself
@@ -231,50 +226,122 @@ public struct ExpandedView: View {
     }
 
     private func header(_ content: ActivityContent) -> some View {
-        HStack(spacing: 12) {
-            ActivityIconView(icon: content.icon, size: 38, tint: tint)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: IslandDesign.space(3)) {
+            mark(content)
+
+            VStack(alignment: .leading, spacing: 1) {
                 Text(content.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(IslandPalette.primaryText)
+                    .islandTitle()
                     .lineLimit(1)
                 if let subtitle = content.subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(IslandPalette.secondaryText)
+                        .font(IslandDesign.Text.subtitle)
+                        .foregroundStyle(IslandDesign.Ink.secondary)
                         .lineLimit(1)
                 }
             }
-            Spacer(minLength: 8)
+
+            Spacer(minLength: IslandDesign.space(2))
+
             if content.countdownTarget != nil || content.countUpFrom != nil {
                 LiveTimeText(
                     target: content.countdownTarget,
                     countUpFrom: content.countUpFrom,
-                    font: .system(size: 17, weight: .semibold, design: .rounded),
-                    color: tint
+                    font: IslandDesign.Text.metric(17),
+                    color: style.tint
                 )
             } else if let trailing = content.trailingText {
                 Text(trailing)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(IslandDesign.Text.metric(16))
                     .monospacedDigit()
-                    .foregroundStyle(tint)
+                    .foregroundStyle(style.tint)
+                    .contentTransition(.numericText())
             }
+        }
+    }
+
+    /// A symbol gets a tinted chip; real artwork stands on its own with a
+    /// hairline so it doesn't float against the black.
+    @ViewBuilder
+    private func mark(_ content: ActivityContent) -> some View {
+        let size: CGFloat = 38
+        if case .symbol = content.icon {
+            IconChip(tint: style.tint, size: size) {
+                ActivityIconView(icon: content.icon, size: size * 0.52, tint: style.tint)
+            }
+        } else if content.icon != nil {
+            Artwork(icon: content.icon, size: size, cornerRadius: size * 0.26)
+        } else {
+            IconChip(tint: style.tint, size: size) {
+                Circle()
+                    .fill(style.tint)
+                    .frame(width: size * 0.22, height: size * 0.22)
+            }
+        }
+    }
+
+    private func details(_ rows: [ActivityDetail]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, detail in
+                if index > 0 {
+                    Rectangle()
+                        .fill(IslandDesign.Ink.separator)
+                        .frame(height: 0.5)
+                }
+                HStack {
+                    Text(detail.label)
+                        .font(IslandDesign.Text.label)
+                        .foregroundStyle(IslandDesign.Ink.tertiary)
+                    Spacer(minLength: IslandDesign.space(3))
+                    Text(detail.value)
+                        .font(IslandDesign.Text.value)
+                        .foregroundStyle(IslandDesign.Ink.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .padding(.vertical, IslandDesign.space(1.25))
+            }
+        }
+        .padding(.horizontal, IslandDesign.space(2.5))
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.045))
+        }
+    }
+
+    private func actions(_ actions: [ActivityAction]) -> some View {
+        HStack(spacing: IslandDesign.space(2)) {
+            ForEach(actions) { action in
+                Button {
+                    onAction(action)
+                } label: {
+                    HStack(spacing: IslandDesign.space(1.25)) {
+                        if let symbol = action.symbol {
+                            Image(systemName: symbol)
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        Text(action.title)
+                    }
+                }
+                .buttonStyle(IslandButtonStyle(tint: style.tint, isDestructive: action.isDestructive))
+            }
+            Spacer(minLength: 0)
         }
     }
 
     /// Dots for paging between concurrent activities, the way the island cycles
     /// when more than one thing is live.
     private var switcher: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: IslandDesign.space(1.5)) {
             ForEach(siblings) { sibling in
+                let isCurrent = sibling.id == activity.id
                 Button {
                     onSelect(sibling.id)
                 } label: {
-                    Capsule()
-                        .fill(sibling.id == activity.id
-                              ? IslandPalette.primaryText
-                              : Color.white.opacity(0.25))
-                        .frame(width: sibling.id == activity.id ? 16 : 6, height: 6)
+                    Capsule(style: .continuous)
+                        .fill(isCurrent ? IslandDesign.Ink.primary : Color.white.opacity(0.22))
+                        .frame(width: isCurrent ? 15 : 5, height: 5)
                 }
                 .buttonStyle(.plain)
             }
@@ -286,20 +353,40 @@ public struct ExpandedView: View {
 
 // MARK: - Small parts
 
+/// Album art and app icons, with a hairline edge so they read as inset into the
+/// island rather than pasted on.
+struct Artwork: View {
+    var icon: ActivityIcon?
+    var size: CGFloat
+    var cornerRadius: CGFloat
+
+    var body: some View {
+        ActivityIconView(icon: icon, size: size)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
+            }
+            .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+    }
+}
+
 struct BreathingDot: View {
     var tint: Color
+    var size: CGFloat = 7
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            let scale = 0.82 + 0.18 * (sin(t * 2.4) + 1) / 2
+            let phase = (sin(t * 2.2) + 1) / 2
             Circle()
                 .fill(tint)
-                .frame(width: 8, height: 8)
-                .scaleEffect(scale)
-                .opacity(0.65 + 0.35 * scale)
+                .frame(width: size, height: size)
+                .scaleEffect(0.84 + 0.16 * phase)
+                .opacity(0.62 + 0.38 * phase)
+                .glyphGlow(tint, radius: size * 0.7, intensity: 0.55)
         }
-        .frame(width: 12, height: 12)
+        .frame(width: size + 5, height: size + 5)
     }
 }
 
@@ -311,7 +398,7 @@ struct PrivacyDot: View {
         Circle()
             .fill(tint)
             .frame(width: size, height: size)
-            .shadow(color: tint.opacity(0.8), radius: size * 0.5)
+            .shadow(color: tint.opacity(0.9), radius: size * 0.55)
     }
 }
 

@@ -26,6 +26,9 @@ enum SettingsTab: String, CaseIterable {
 struct SettingsView: View {
     @Bindable var settings: IsletSettings
     @State var tab: SettingsTab = .general
+    /// Module to open the customization sheet for straight away, from
+    /// `islet settings --customize system.media`.
+    var customizing: String?
     var modules: [ModuleInfo]
     var weatherProvider: WeatherProvider?
     var onToggleModule: (String, Bool) -> Void
@@ -40,6 +43,7 @@ struct SettingsView: View {
             ModuleSettings(
                 settings: settings,
                 modules: modules,
+                customizing: customizing,
                 onToggle: onToggleModule
             )
             .tabItem { Label("Modules", systemImage: "square.grid.2x2") }
@@ -136,7 +140,10 @@ private struct GeneralSettings: View {
 private struct ModuleSettings: View {
     @Bindable var settings: IsletSettings
     var modules: [ModuleInfo]
+    var customizing: String?
     var onToggle: (String, Bool) -> Void
+
+    @State private var editing: ModuleInfo?
 
     var body: some View {
         Form {
@@ -145,7 +152,7 @@ private struct ModuleSettings: View {
                     row(module)
                 }
             } header: {
-                Text("Turn off anything you don't want on the island.")
+                Text("Turn off anything you don't want on the island, or open the sliders to change how it looks.")
             } footer: {
                 Text("Greyed-out modules aren't supported on this Mac, or a permission was declined.")
                     .font(.caption)
@@ -153,24 +160,70 @@ private struct ModuleSettings: View {
             }
         }
         .formStyle(.grouped)
-        // `moduleRevision` is the observable stand-in for enablement, which
-        // lives in UserDefaults rather than in a stored property.
-        .id(settings.moduleRevision)
+        // `moduleRevision` and `appearanceRevision` are the observable stand-ins
+        // for state that lives in UserDefaults rather than stored properties.
+        .id("\(settings.moduleRevision)-\(settings.appearanceRevision)")
+        .sheet(item: $editing) { module in
+            ModuleCustomizationSheet(module: module, settings: settings) {
+                editing = nil
+            }
+        }
+        .onAppear {
+            guard let customizing else { return }
+            editing = modules.first { $0.id == customizing }
+        }
     }
 
     private func row(_ module: ModuleInfo) -> some View {
-        Toggle(isOn: Binding(
-            get: { settings.isModuleEnabled(module.id) },
-            set: { onToggle(module.id, $0) }
-        )) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(module.name)
-                Text(module.isAvailable ? module.summary : "Not available on this Mac")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        let appearance = settings.appearance(for: module.id)
+        let isEnabled = settings.isModuleEnabled(module.id)
+
+        return HStack(spacing: 10) {
+            Toggle(isOn: Binding(
+                get: { isEnabled },
+                set: { onToggle(module.id, $0) }
+            )) {
+                HStack(spacing: 9) {
+                    swatch(module, appearance: appearance)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(module.name)
+                            if !appearance.isDefault {
+                                Text("Customised")
+                                    .font(.caption2.weight(.medium))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1.5)
+                                    .background(Capsule().fill(Color.accentColor.opacity(0.16)))
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        Text(module.isAvailable ? module.summary : "Not available on this Mac")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
+
+            Button {
+                editing = module
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+            }
+            .buttonStyle(.borderless)
+            .help("Colour, size, and position")
+            .disabled(!module.isAvailable || !isEnabled)
         }
         .disabled(!module.isAvailable)
+    }
+
+    /// The module's effective colour, so the list shows overrides at a glance.
+    private func swatch(_ module: ModuleInfo, appearance: ModuleAppearance) -> some View {
+        let sample = ModulePreviewSample.activity(for: module.id)
+        let color = appearance.tint ?? sample.content.tint ?? .accent
+        return Circle()
+            .fill(Color(color))
+            .frame(width: 10, height: 10)
+            .overlay { Circle().strokeBorder(.white.opacity(0.25), lineWidth: 0.5) }
     }
 }
 

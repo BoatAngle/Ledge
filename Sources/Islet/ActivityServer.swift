@@ -29,7 +29,7 @@ final class ActivityServer {
     weak var weather: WeatherProvider?
     /// Opens the settings window. Set by the app delegate.
     /// Opens the settings window at a named tab.
-    var openSettings: ((String?) -> Void)?
+    var openSettings: ((_ tab: String?, _ customizing: String?) -> Void)?
     private var listenDescriptor: Int32 = -1
     private var acceptSource: DispatchSourceRead?
     /// Identity of the socket file we created, so shutdown can tell ours apart
@@ -234,8 +234,8 @@ final class ActivityServer {
 
         case .settings:
             guard let openSettings else { return .failure("Settings aren't available.") }
-            // `id` carries the tab name for this command.
-            openSettings(request.id)
+            // `id` carries the tab name, `source` the module to customise.
+            openSettings(request.id, request.source)
             return IsletResponse(ok: true, message: "opened")
         }
     }

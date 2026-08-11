@@ -180,9 +180,41 @@ public final class IsletSettings {
     /// stored property to notice.
     public private(set) var moduleRevision: UInt64 = 0
 
+    // MARK: Appearance
+
+    /// Per-module colour, size, and placement.
+    public func appearance(for identifier: String) -> ModuleAppearance {
+        guard let data = defaults.data(forKey: Keys.appearance(identifier)),
+              let decoded = try? JSONDecoder().decode(ModuleAppearance.self, from: data)
+        else { return .default }
+        return decoded
+    }
+
+    public func setAppearance(_ appearance: ModuleAppearance, for identifier: String) {
+        if appearance.isDefault {
+            // Store nothing for defaults, so a future change to what "default"
+            // means reaches anyone who never customised the module.
+            defaults.removeObject(forKey: Keys.appearance(identifier))
+        } else if let data = try? JSONEncoder().encode(appearance) {
+            defaults.set(data, forKey: Keys.appearance(identifier))
+        }
+        appearanceRevision &+= 1
+        NotificationCenter.default.post(name: .isletAppearanceChanged, object: nil)
+    }
+
+    public func resetAppearance(for identifier: String) {
+        defaults.removeObject(forKey: Keys.appearance(identifier))
+        appearanceRevision &+= 1
+        NotificationCenter.default.post(name: .isletAppearanceChanged, object: nil)
+    }
+
+    /// Observable stand-in for appearance, which lives in `UserDefaults`.
+    public private(set) var appearanceRevision: UInt64 = 0
+
     public func resetToDefaults() {
         for key in Keys.all { defaults.removeObject(forKey: key) }
-        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("module.") {
+        for key in defaults.dictionaryRepresentation().keys
+        where key.hasPrefix("module.") || key.hasPrefix("appearance.") {
             defaults.removeObject(forKey: key)
         }
         expandOnHover = true
@@ -197,6 +229,8 @@ public final class IsletSettings {
         manualPlaceName = ""
         weatherAlerts = false
         moduleRevision &+= 1
+        appearanceRevision &+= 1
+        NotificationCenter.default.post(name: .isletAppearanceChanged, object: nil)
     }
 
     enum Keys {
@@ -216,6 +250,10 @@ public final class IsletSettings {
         /// survive the move into this type.
         static func module(_ identifier: String) -> String {
             "module.\(identifier).enabled"
+        }
+
+        static func appearance(_ identifier: String) -> String {
+            "appearance.\(identifier)"
         }
 
         static let all = [

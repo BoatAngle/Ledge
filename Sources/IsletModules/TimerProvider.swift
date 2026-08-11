@@ -125,6 +125,7 @@ public final class TimerProvider: SystemProvider {
                     countdownTarget: timer.fireDate
                 ),
                 nativeView: .timer,
+                module: identifier,
                 isExpandable: true
             )
         )
@@ -155,6 +156,7 @@ public final class TimerProvider: SystemProvider {
         store?.flash(
             id: "timer.finished.\(timer.id)",
             nativeView: .timer,
+            module: identifier,
             content: ActivityContent(
                 title: timer.label,
                 subtitle: "Timer finished",

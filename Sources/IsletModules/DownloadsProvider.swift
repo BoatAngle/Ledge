@@ -266,6 +266,7 @@ public final class DownloadsProvider: SystemProvider {
                     ]
                 ),
                 nativeView: .download,
+                module: identifier,
                 isExpandable: true
             )
         )
@@ -283,6 +284,7 @@ public final class DownloadsProvider: SystemProvider {
         store.flash(
             id: "downloads.finished",
             nativeView: .download,
+            module: identifier,
             content: ActivityContent(
                 title: entry.displayName,
                 subtitle: "Downloaded — \(Self.byteFormatter.string(fromByteCount: Self.size(of: finished)))",

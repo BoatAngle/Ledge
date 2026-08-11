@@ -29,16 +29,16 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.onToggleModule = onToggleModule
     }
 
-    func show(tab: SettingsTab = .general) {
+    func show(tab: SettingsTab = .general, customizing: String? = nil) {
         if let window {
             // Rebuild so the requested tab is the one on screen.
-            window.contentView = NSHostingView(rootView: makeRoot(tab: tab))
+            window.contentView = NSHostingView(rootView: makeRoot(tab: tab, customizing: customizing))
             promote()
             window.makeKeyAndOrderFront(nil)
             return
         }
 
-        let root = makeRoot(tab: tab)
+        let root = makeRoot(tab: tab, customizing: customizing)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 540, height: 440),
             styleMask: [.titled, .closable, .miniaturizable],
@@ -62,10 +62,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: makeRoot(tab: .modules))
     }
 
-    private func makeRoot(tab: SettingsTab) -> SettingsView {
+    private func makeRoot(tab: SettingsTab, customizing: String? = nil) -> SettingsView {
         SettingsView(
             settings: settings,
             tab: tab,
+            customizing: customizing,
             modules: modules(),
             weatherProvider: weatherProvider(),
             onToggleModule: onToggleModule,

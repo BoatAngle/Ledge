@@ -62,6 +62,12 @@ public struct Activity: Codable, Hashable, Sendable, Identifiable {
     public var priority: ActivityPriority
     public var content: ActivityContent
     public var nativeView: NativeViewKind?
+    /// Which built-in module produced this, for per-module appearance.
+    ///
+    /// Separate from `id` because one module can post many activities — every
+    /// running timer is its own activity but they all share the timer module's
+    /// colour and size.
+    public var module: String?
 
     /// When the activity was first posted.
     public var createdAt: Date
@@ -85,6 +91,7 @@ public struct Activity: Codable, Hashable, Sendable, Identifiable {
         priority: ActivityPriority = .normal,
         content: ActivityContent,
         nativeView: NativeViewKind? = nil,
+        module: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         expiresAt: Date? = nil,
@@ -97,6 +104,7 @@ public struct Activity: Codable, Hashable, Sendable, Identifiable {
         self.priority = priority
         self.content = content
         self.nativeView = nativeView
+        self.module = module
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.expiresAt = expiresAt
@@ -110,7 +118,21 @@ public struct Activity: Codable, Hashable, Sendable, Identifiable {
     }
 
     /// Effective priority, boosting transients so they cut in front.
-    var effectivePriority: Int {
-        kind == .transient ? priority.rawValue + 10_000 : priority.rawValue
+    ///
+    /// `appearance` folds in the user's per-module nudges. Slot preferences are
+    /// expressed as priority bias rather than as a separate placement pass:
+    /// "prefer the small circle" *is* "rank below whatever else is live", and
+    /// one ordering rule is far easier to reason about than two.
+    func effectivePriority(_ appearance: ModuleAppearance? = nil) -> Int {
+        var value = priority.rawValue
+        if let appearance {
+            value += appearance.priorityOffset
+            switch appearance.slot {
+            case .automatic: break
+            case .leading: value += 300
+            case .minimal: value -= 300
+            }
+        }
+        return kind == .transient ? value + 10_000 : value
     }
 }

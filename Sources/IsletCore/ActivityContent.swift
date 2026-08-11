@@ -58,6 +58,13 @@ public struct IsletColor: Codable, Hashable, Sendable {
     public static let pink = named["pink"]!
     public static let gray = named["gray"]!
 
+    /// Stable ordering for swatch grids. `named` is a dictionary, so iterating
+    /// it directly would shuffle the palette on every launch.
+    public static let paletteOrder = [
+        "red", "orange", "yellow", "green", "mint", "teal",
+        "cyan", "blue", "indigo", "purple", "pink", "gray",
+    ]
+
     /// The palette the `--tint` flag resolves against.
     public static let named: [String: IsletColor] = [
         "red": IsletColor(red: 1.00, green: 0.27, blue: 0.23),

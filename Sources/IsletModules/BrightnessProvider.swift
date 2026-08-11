@@ -73,6 +73,7 @@ public final class BrightnessProvider: SystemProvider {
         store.flash(
             id: identifier,
             nativeView: .brightness,
+            module: identifier,
             content: ActivityContent(
                 title: "Brightness",
                 icon: .symbol(value < 0.34 ? "sun.min.fill" : "sun.max.fill"),
