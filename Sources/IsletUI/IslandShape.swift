@@ -142,11 +142,31 @@ public struct IslandSilhouette: View {
     @ViewBuilder
     private var surface: some View {
         if theme.usesGlass, hasDepth {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(alignment: .top) {
-                    Color.black.frame(height: max(opaqueTopHeight, 1))
-                }
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                // Guarantees a contrast floor no matter what the material is
+                // sampling. Without it the panel is unreadable over a bright
+                // desktop, which is the fastest way to lose a design argument.
+                Rectangle().fill(Color.black.opacity(theme.glassScrim))
+            }
+            // The island is always dark; without pinning this, the material
+            // picks the light variant in Light Mode and turns milky.
+            .environment(\.colorScheme, .dark)
+            .overlay(alignment: .top) {
+                Color.black.frame(height: max(opaqueTopHeight, 1))
+            }
+            .overlay(alignment: .top) {
+                // Specular line where the glass begins, so the transition from
+                // solid bezel to translucent panel reads as an edge rather
+                // than a mistake.
+                LinearGradient(
+                    colors: [.white.opacity(0.28), .white.opacity(0.04)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(height: 0.75)
+                .offset(y: max(opaqueTopHeight, 1))
+            }
         } else {
             Rectangle().fill(theme.surfaceFill(liftsAtBottom: hasDepth))
         }

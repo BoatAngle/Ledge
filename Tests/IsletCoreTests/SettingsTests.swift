@@ -146,6 +146,18 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertNotEqual(settings.appearanceRevision, before)
     }
 
+    /// Recorded because it's a design decision, not an accident: Glass is the
+    /// direction that got picked, so a fresh install should show it.
+    func testGlassIsTheShippedDefault() {
+        XCTAssertEqual(IsletSettings(defaults: defaults).theme, .glass)
+    }
+
+    func testThemeSurvivesRelaunch() {
+        let settings = IsletSettings(defaults: defaults)
+        settings.theme = .editorial
+        XCTAssertEqual(IsletSettings(defaults: defaults).theme, .editorial)
+    }
+
     func testResetClearsAppearance() {
         let settings = IsletSettings(defaults: defaults)
         settings.setAppearance(ModuleAppearance(tint: .red), for: "system.media")

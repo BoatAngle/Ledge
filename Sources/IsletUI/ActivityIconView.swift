@@ -59,10 +59,21 @@ public struct ActivityIconView: View {
         Group {
             switch icon {
             case .symbol(let name):
-                Image(systemName: theme.symbolName(name))
-                    .font(.system(size: size * 0.72, weight: theme.glyphWeight))
-                    .foregroundStyle(tint)
-                    .frame(width: size, height: size)
+                // Islet's own family where one exists; Apple's where it doesn't,
+                // so an unmapped `--icon symbol:foo` still renders something.
+                if let glyph = IsletGlyph.mapping(for: name) {
+                    IsletGlyphView(
+                        glyph: glyph,
+                        size: size,
+                        tint: tint,
+                        lineWidth: theme.glyphLineWidth
+                    )
+                } else {
+                    Image(systemName: theme.symbolName(name))
+                        .font(.system(size: size * 0.72, weight: theme.glyphWeight))
+                        .foregroundStyle(tint)
+                        .frame(width: size, height: size)
+                }
             case .some(let other):
                 if let image = IconCache.shared.image(for: other) {
                     Image(nsImage: image)

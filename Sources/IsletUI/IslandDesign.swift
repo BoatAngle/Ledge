@@ -262,7 +262,7 @@ public struct IslandButtonStyle: ButtonStyle {
             Capsule(style: .continuous)
                 .fill(isDestructive ? Color.red.opacity(0.18) : IslandDesign.Ink.controlFill)
         case .glass:
-            Capsule(style: .continuous).fill(.ultraThinMaterial)
+            Capsule(style: .continuous).fill(Color.white.opacity(0.14))
         case .bordered, .plain:
             Color.clear
         }

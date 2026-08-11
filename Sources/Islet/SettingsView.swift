@@ -1,6 +1,7 @@
 import AppKit
 import IsletCore
 import IsletModules
+import IsletUI
 import ServiceManagement
 import SwiftUI
 
@@ -68,6 +69,16 @@ private struct GeneralSettings: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
+    /// A representative activity so the theme picker shows a real island
+    /// rather than an abstract swatch.
+    private var themeSample: Activity {
+        ModulePreviewSample.activity(for: "system.timer")
+    }
+
+    private var themeSampleStyle: ActivityStyle {
+        ActivityStyle.resolve(themeSample, appearance: nil)
+    }
+
     var body: some View {
         Form {
             Section {
@@ -80,6 +91,25 @@ private struct GeneralSettings: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
+            }
+
+            Section("Appearance") {
+                Picker("Theme", selection: $settings.theme) {
+                    ForEach(IslandThemeID.allCases, id: \.self) { id in
+                        Text(id.label).tag(id)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Text(settings.theme.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                IslandPreviewStage {
+                    IslandStylePreview(activity: themeSample, style: themeSampleStyle)
+                }
+                .islandTheme(.preset(settings.theme))
             }
 
             Section("Interaction") {

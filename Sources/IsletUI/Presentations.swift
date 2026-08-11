@@ -320,11 +320,18 @@ public struct ExpandedView: View {
                 .frame(width: size, height: size)
                 .background {
                     RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                        .fill(Color.white.opacity(0.13))
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.75)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.white.opacity(0.34), .white.opacity(0.10)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.75
+                        )
                 }
         case .none:
             content()
@@ -366,11 +373,20 @@ public struct ExpandedView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.white.opacity(0.045))
         case .glass:
+            // A pane, not another material. Nesting materials compounds the
+            // blur into mud and costs a second offscreen pass for no gain.
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(Color.white.opacity(0.09))
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.white.opacity(0.26), .white.opacity(0.08)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.75
+                        )
                 }
         case .rules, .plain:
             Color.clear

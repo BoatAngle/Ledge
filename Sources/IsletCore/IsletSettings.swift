@@ -152,7 +152,7 @@ public final class IsletSettings {
         showOnNotchlessDisplays = defaults.object(forKey: Keys.showOnNotchless) as? Bool ?? true
         animateArrivals = defaults.object(forKey: Keys.animateArrivals) as? Bool ?? true
         theme = (defaults.string(forKey: Keys.theme)
-            .flatMap(IslandThemeID.init(rawValue:))) ?? .vivid
+            .flatMap(IslandThemeID.init(rawValue:))) ?? .glass
 
         // On-demand rather than always-visible by default. A permanent readout
         // would mean the island is never actually idle, and "invisible until
@@ -231,7 +231,7 @@ public final class IsletSettings {
         hoverDelay = 220
         showOnNotchlessDisplays = true
         animateArrivals = true
-        theme = .vivid
+        theme = .glass
         weatherMode = .onDemand
         temperatureUnit = .localeDefault
         weatherLocationMode = .automatic

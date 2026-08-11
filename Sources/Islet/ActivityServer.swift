@@ -232,6 +232,24 @@ final class ActivityServer {
                 message: "\(reading.condition.summary), \(Int(reading.temperature.rounded()))°"
             )
 
+        case .expand:
+            guard !store.composition.isIdle else {
+                return .failure("Nothing on the island to expand.")
+            }
+            if let id = request.id {
+                guard store.activities[id] != nil else {
+                    return .failure("No activity with id \"\(id)\".")
+                }
+                store.focusedActivityID = id
+            }
+            store.isExpanded = true
+            return IsletResponse(ok: true, id: store.composition.expandedActivity?.id)
+
+        case .collapse:
+            store.isExpanded = false
+            store.focusedActivityID = nil
+            return IsletResponse(ok: true)
+
         case .settings:
             guard let openSettings else { return .failure("Settings aren't available.") }
             // `id` carries the tab name, `source` the module to customise.

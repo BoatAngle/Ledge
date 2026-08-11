@@ -31,6 +31,8 @@ do {
     case "shelf":           try shelf()
     case "weather":         try weather()
     case "settings":        try openSettings()
+    case "expand":          try setExpanded(true)
+    case "collapse":        try setExpanded(false)
     case "help":            printUsage()
     default:
         FileHandle.standardError.write(Data("Unknown command \"\(subcommand)\".\n\n".utf8))
@@ -101,6 +103,14 @@ func list() throws {
             .map { " \(Int($0 * 100))%" } ?? ""
         print("\(activity.id)\t[\(activity.source)]\t\(activity.content.title)\(progress)")
     }
+}
+
+/// `islet expand` / `islet collapse` — open or close the panel.
+func setExpanded(_ expanded: Bool) throws {
+    let response = try client.send(
+        IsletRequest(command: expanded ? .expand : .collapse, id: identifier())
+    )
+    emit(["id": response.id ?? ""], plain: response.id ?? (expanded ? "expanded" : "collapsed"))
 }
 
 /// `islet settings` — bring up the settings window.
@@ -357,6 +367,8 @@ func printUsage() {
       timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
       shelf [files] Park files on the island to drag out later. No args clears.
       weather      Show current conditions on the island.
+      expand [id]  Open the panel, optionally on a specific activity.
+      collapse     Close the panel.
       settings     Open the settings window.
                    --tab general|modules|weather|about
                    --customize <module-id>  jump to a module's colour/size/position

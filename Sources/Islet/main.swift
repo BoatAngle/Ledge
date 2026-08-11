@@ -4,6 +4,13 @@ import AppKit
 @MainActor
 enum IsletApp {
     static func main() {
+        // Developer flag: render the icon contact sheet and exit.
+        let arguments = CommandLine.arguments
+        if let index = arguments.firstIndex(of: "--glyph-sheet"), index + 1 < arguments.count {
+            GlyphSheet.render(to: arguments[index + 1])
+            exit(0)
+        }
+
         let application = NSApplication.shared
         // Menu-bar only: the island *is* the interface, and a Dock icon for it
         // would be noise.

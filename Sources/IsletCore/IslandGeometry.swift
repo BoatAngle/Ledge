@@ -35,25 +35,39 @@ public struct IslandMetrics: Equatable, Sendable {
 public enum IslandGeometry {
     // MARK: Tunables
 
-    /// Extra width per side in the compact state, enough for a glyph plus air.
-    public static let compactSidePadding: CGFloat = 62
+    /// Extra width per side in the compact state.
+    ///
+    /// Tighter than it looks like it should be. The camera housing is already
+    /// 220pt wide, so every point added here is doubled and the compact state
+    /// stretches toward a letterbox; hugging close keeps it reading as one
+    /// object rather than a bar.
+    public static let compactSidePadding: CGFloat = 52
     /// Grown height in compact — a couple of points taller than the notch reads
     /// as "alive" without looking detached.
-    public static let compactHeightBonus: CGFloat = 5
+    public static let compactHeightBonus: CGFloat = 6
     /// Diameter of the detached circle in `.split`.
-    public static let minimalDiameter: CGFloat = 30
+    public static let minimalDiameter: CGFloat = 28
     /// Gap between the compact body and the detached circle.
-    public static let splitGap: CGFloat = 9
+    public static let splitGap: CGFloat = 10
 
-    public static let expandedWidth: CGFloat = 420
+    /// Wider than the old 420.
+    ///
+    /// Apple's island expands to roughly 2.9× its idle width; at 420 against a
+    /// 220pt housing this only managed 1.9×, so opening it felt like a nudge
+    /// rather than an event.
+    public static let expandedWidth: CGFloat = 468
     public static let expandedMinHeight: CGFloat = 86
     public static let expandedMaxHeight: CGFloat = 420
 
     /// Convex radius on the island's lower corners.
-    public static let bottomRadius: CGFloat = 20
+    ///
+    /// Just under half the compact height, so the lower edge is a hair off a
+    /// full capsule — a true capsule reads as a pill sitting on the bezel
+    /// rather than a shape cut into it.
+    public static let bottomRadius: CGFloat = 21
     /// Concave fillet where the island meets the top edge of the screen. This
     /// is the detail that sells the "carved out of the bezel" illusion.
-    public static let topFillet: CGFloat = 11
+    public static let topFillet: CGFloat = 12
 
     // MARK: Sizing
 
@@ -127,7 +141,7 @@ public enum IslandGeometry {
         case .compact, .split:
             return bottomRadius
         case .expanded:
-            return 30
+            return 34
         }
     }
 

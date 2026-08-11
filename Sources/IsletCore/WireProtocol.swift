@@ -51,6 +51,13 @@ public enum IsletCommand: String, Codable, Sendable {
     case weather
     /// Bring up the settings window.
     case settings
+    /// Open or close the expanded panel.
+    ///
+    /// Hovering is the normal way in, but a script wanting to *show* something
+    /// — a Shortcut, a demo, a screenshot — shouldn't have to synthesise mouse
+    /// movement to do it.
+    case expand
+    case collapse
 }
 
 public struct IsletRequest: Codable, Sendable {

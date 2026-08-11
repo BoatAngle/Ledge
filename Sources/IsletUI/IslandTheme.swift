@@ -52,6 +52,13 @@ public struct IslandTheme: Equatable, Sendable {
     public var rimOpacity: Double
     /// Translucent body below the camera strip.
     public var usesGlass: Bool
+    /// Darkening laid over the material.
+    ///
+    /// A bare material samples whatever is behind the window, so over a bright
+    /// desktop the panel's own text loses contrast — the frosted look reads as
+    /// "designed" right up until you can't read it. The scrim buys back a
+    /// guaranteed floor while keeping the blur.
+    public var glassScrim: Double
     public var bottomRadiusScale: CGFloat
 
     // Glyphs
@@ -61,6 +68,8 @@ public struct IslandTheme: Equatable, Sendable {
     public var prefersFilledSymbols: Bool
     public var accentUsage: AccentUsage
     public var compactGlyphScale: CGFloat
+    /// Stroke weight for the custom glyph family, at a 24pt reference size.
+    public var glyphLineWidth: CGFloat
 
     // Type
     public var titleSize: CGFloat
@@ -87,12 +96,14 @@ public struct IslandTheme: Equatable, Sendable {
         surfaceLift: 0.03,
         rimOpacity: 0.06,
         usesGlass: false,
+        glassScrim: 0,
         bottomRadiusScale: 1,
         glyphGlow: 0,
         glyphWeight: .medium,
         prefersFilledSymbols: false,
         accentUsage: .sparing,
         compactGlyphScale: 0.95,
+        glyphLineWidth: 1.7,
         titleSize: 13.5,
         titleWeight: .semibold,
         titleTracking: -0.1,
@@ -113,12 +124,14 @@ public struct IslandTheme: Equatable, Sendable {
         surfaceLift: 0.05,
         rimOpacity: 0.10,
         usesGlass: false,
+        glassScrim: 0,
         bottomRadiusScale: 1,
         glyphGlow: 0.45,
         glyphWeight: .semibold,
         prefersFilledSymbols: true,
         accentUsage: .full,
         compactGlyphScale: 1.05,
+        glyphLineWidth: 2.1,
         titleSize: 14,
         titleWeight: .semibold,
         titleTracking: -0.24,
@@ -137,14 +150,16 @@ public struct IslandTheme: Equatable, Sendable {
     public static let glass = IslandTheme(
         id: .glass,
         surfaceLift: 0.06,
-        rimOpacity: 0.20,
+        rimOpacity: 0.30,
         usesGlass: true,
+        glassScrim: 0.46,
         bottomRadiusScale: 1.15,
         glyphGlow: 0.3,
         glyphWeight: .medium,
         prefersFilledSymbols: true,
         accentUsage: .full,
         compactGlyphScale: 1,
+        glyphLineWidth: 1.9,
         titleSize: 14,
         titleWeight: .medium,
         titleTracking: -0.2,
@@ -165,12 +180,14 @@ public struct IslandTheme: Equatable, Sendable {
         surfaceLift: 0.02,
         rimOpacity: 0.05,
         usesGlass: false,
+        glassScrim: 0,
         bottomRadiusScale: 0.85,
         glyphGlow: 0,
         glyphWeight: .regular,
         prefersFilledSymbols: false,
         accentUsage: .sparing,
         compactGlyphScale: 0.9,
+        glyphLineWidth: 1.45,
         titleSize: 15,
         titleWeight: .medium,
         titleTracking: -0.35,
