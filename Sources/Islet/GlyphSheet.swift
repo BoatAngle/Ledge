@@ -11,8 +11,8 @@ import SwiftUI
 @MainActor
 enum GlyphSheet {
     static func render(to path: String) {
-        let columns = 8
-        let cell: CGFloat = 92
+        let columns = 5
+        let cell: CGFloat = 132
         let glyph: CGFloat = 44
         let rows = (IsletGlyph.allCases.count + columns - 1) / columns
 
@@ -24,12 +24,19 @@ enum GlyphSheet {
                         if index < IsletGlyph.allCases.count {
                             let item = IsletGlyph.allCases[index]
                             VStack(spacing: 7) {
-                                IsletGlyphView(
-                                    glyph: item,
-                                    size: glyph,
-                                    tint: .white,
-                                    lineWidth: 1.9
-                                )
+                                // Both weights together: the only way to see
+                                // whether a solid mark still reads as the same
+                                // idea as its outline.
+                                HStack(spacing: 10) {
+                                    IsletGlyphView(
+                                        glyph: item, size: glyph, tint: .white,
+                                        lineWidth: 1.9, weight: .outline
+                                    )
+                                    IsletGlyphView(
+                                        glyph: item, size: glyph, tint: .white,
+                                        lineWidth: 2.1, weight: .solid
+                                    )
+                                }
                                 Text(item.rawValue)
                                     .font(.system(size: 9))
                                     .foregroundStyle(.white.opacity(0.45))

@@ -180,6 +180,35 @@ otherwise couldn't (the data lives in `UserDefaults`), and
 ordering is only recomputed when activities change, so without it the position
 slider would do nothing until the next event.
 
+## The glyph family
+
+`IsletGlyph` is Islet's own icon set — one 24pt grid, round caps, weight scaled
+by the theme. Two weights: `.outline` and `.solid`.
+
+A solid mark is **not the outline filled**. Filling a battery outline gives a
+black lozenge, not a battery. Solid variants are different geometry:
+a silhouette with its interior detail subtracted.
+
+`paths(in:weight:)` returns **three** paths — stroke, fill, and holes:
+
+- Stroke is linear detail. In the solid weight, *enclosed forms* fill while
+  *linear detail stays stroked*: a speaker's cone fills, its sound waves do not.
+  Filling everything turns small marks into blobs.
+- Holes are punched with `.destinationOut` in a `drawLayer`, **not** an even-odd
+  winding. Even-odd also cancels wherever two *intended* solids overlap — a
+  music note's stem crossing its head would punch through both.
+
+Two bugs the contact sheet caught that unit tests would not have:
+a skip glyph's trailing bar vanished because it was placed in a filled path and
+a line has no area; and the solid battery's charge level was drawn into the fill
+and then erased by a knockout covering the whole interior. There are now
+regression tests for both, but the *sheet* is what found them.
+
+Maintain the set by looking at it: `Islet.app/Contents/MacOS/Islet --glyph-sheet
+out.png` renders every mark in both weights, side by side. That comparison is
+the point — it's how you see whether a solid mark still reads as the same idea
+as its outline.
+
 ## Settings deep links
 
 `islet settings --tab weather` and `islet settings --customize system.media`

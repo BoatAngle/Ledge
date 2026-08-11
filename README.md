@@ -177,6 +177,17 @@ echo '{"title":"Custom","progress":{"fraction":0.5}}' | islet start --stdin
 
 Only `title` is required — you never have to write empty arrays.
 
+## Icons
+
+Islet draws its own — 37 marks on a single 24pt grid, in outline and solid
+weights, with the weight chosen by the theme. SF Symbols are excellent, but they
+carry Apple's optical conventions; at 20pt on black they read as system icons
+borrowed onto someone else's surface.
+
+Modules and the CLI still speak SF Symbol names, mapped onto the family, so
+`islet start --icon symbol:bolt.fill` keeps working and anything unmapped falls
+back to Apple's glyph rather than failing.
+
 ## Architecture
 
 ```

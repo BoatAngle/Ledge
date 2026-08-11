@@ -66,7 +66,8 @@ public struct ActivityIconView: View {
                         glyph: glyph,
                         size: size,
                         tint: tint,
-                        lineWidth: theme.glyphLineWidth
+                        lineWidth: theme.glyphLineWidth,
+                        weight: theme.glyphFill
                     )
                 } else {
                     Image(systemName: theme.symbolName(name))

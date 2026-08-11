@@ -70,6 +70,8 @@ public struct IslandTheme: Equatable, Sendable {
     public var compactGlyphScale: CGFloat
     /// Stroke weight for the custom glyph family, at a 24pt reference size.
     public var glyphLineWidth: CGFloat
+    /// Whether marks are drawn as silhouettes rather than outlines.
+    public var glyphFill: GlyphWeight
 
     // Type
     public var titleSize: CGFloat
@@ -104,6 +106,7 @@ public struct IslandTheme: Equatable, Sendable {
         accentUsage: .sparing,
         compactGlyphScale: 0.95,
         glyphLineWidth: 1.7,
+        glyphFill: .outline,
         titleSize: 13.5,
         titleWeight: .semibold,
         titleTracking: -0.1,
@@ -132,6 +135,7 @@ public struct IslandTheme: Equatable, Sendable {
         accentUsage: .full,
         compactGlyphScale: 1.05,
         glyphLineWidth: 2.1,
+        glyphFill: .solid,
         titleSize: 14,
         titleWeight: .semibold,
         titleTracking: -0.24,
@@ -160,6 +164,7 @@ public struct IslandTheme: Equatable, Sendable {
         accentUsage: .full,
         compactGlyphScale: 1,
         glyphLineWidth: 1.9,
+        glyphFill: .solid,
         titleSize: 14,
         titleWeight: .medium,
         titleTracking: -0.2,
@@ -188,6 +193,7 @@ public struct IslandTheme: Equatable, Sendable {
         accentUsage: .sparing,
         compactGlyphScale: 0.9,
         glyphLineWidth: 1.45,
+        glyphFill: .outline,
         titleSize: 15,
         titleWeight: .medium,
         titleTracking: -0.35,
