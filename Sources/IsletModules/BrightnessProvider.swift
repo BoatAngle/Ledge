@@ -13,6 +13,7 @@ import IsletCore
 public final class BrightnessProvider: SystemProvider {
     public let identifier = "system.brightness"
     public let displayName = "Display Brightness"
+    public let summary = "Display brightness changes"
     public var isAvailable: Bool { DisplayServicesBridge.shared.isAvailable }
 
     private weak var store: ActivityStore?

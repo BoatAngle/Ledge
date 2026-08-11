@@ -47,6 +47,10 @@ public enum IsletCommand: String, Codable, Sendable {
     /// out/*.png` and then drag them straight into a message — so it would be
     /// a shame to make dragging the only way in.
     case shelf
+    /// Show current conditions on the island now.
+    case weather
+    /// Bring up the settings window.
+    case settings
 }
 
 public struct IsletRequest: Codable, Sendable {

@@ -15,6 +15,8 @@ public protocol SystemProvider: AnyObject {
     var displayName: String { get }
     /// False when this machine or this user can't support the module.
     var isAvailable: Bool { get }
+    /// One line explaining what it does, shown in Settings.
+    var summary: String { get }
 
     func start(store: ActivityStore)
     func stop()
@@ -28,6 +30,7 @@ public protocol SystemProvider: AnyObject {
 public extension SystemProvider {
     func suspend() {}
     func resume() {}
+    var summary: String { "" }
 }
 
 /// Starts and stops the built-in providers as a group.
@@ -46,6 +49,7 @@ public final class ProviderRegistry {
             TimerProvider(),
             CalendarProvider(),
             DownloadsProvider(),
+            WeatherProvider(),
             BatteryProvider(),
             VolumeProvider(),
             BrightnessProvider(),

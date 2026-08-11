@@ -11,6 +11,9 @@ public struct IslandRootView: View {
     /// Files parked on the island, rendered in place of the generic panel when
     /// the shelf is what's showing.
     public var shelf: DropShelf?
+    /// Interaction preferences. Injected rather than reached for, so the view
+    /// stays testable.
+    public var settings: IsletSettings
     /// Called when the island's interactive footprint changes, so the window
     /// can keep its click-through region in sync.
     public var onFootprintChange: (CGSize) -> Void
@@ -25,11 +28,13 @@ public struct IslandRootView: View {
         store: ActivityStore,
         metrics: IslandMetrics,
         shelf: DropShelf? = nil,
+        settings: IsletSettings = .shared,
         onFootprintChange: @escaping (CGSize) -> Void = { _ in }
     ) {
         self.store = store
         self.metrics = metrics
         self.shelf = shelf
+        self.settings = settings
         self.onFootprintChange = onFootprintChange
     }
 
@@ -214,9 +219,10 @@ public struct IslandRootView: View {
             return
         }
 
+        guard settings.expandOnHover else { return }
         guard !composition.isIdle, composition.primary?.isExpandable == true else { return }
         hoverTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(220))
+            try? await Task.sleep(for: .milliseconds(Int(settings.hoverDelay)))
             guard !Task.isCancelled, isHovering else { return }
             expand()
         }
@@ -269,6 +275,7 @@ public struct IslandRootView: View {
     }
 
     private func bounce() {
+        guard settings.animateArrivals else { return }
         withAnimation(IslandMotion.arrival) { arrivalPulse = 1.045 }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(140))

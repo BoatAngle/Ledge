@@ -13,6 +13,7 @@ import IsletCore
 public final class CapsLockProvider: SystemProvider {
     public let identifier = "system.capsLock"
     public let displayName = "Caps Lock"
+    public let summary = "A brief confirmation when Caps Lock toggles"
     public let isAvailable = true
 
     private weak var store: ActivityStore?

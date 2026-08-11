@@ -48,9 +48,17 @@ the same dimensions.
 - **Display Brightness** — brightness HUD
 - **Focus** — the active Focus, persistently but quietly
 - **Caps Lock** — a small confirmation
+- **Weather** — current conditions from Open-Meteo, which needs no account or API key
 - **Camera & Microphone** — privacy indicators the moment something starts using them
 
-Everything stands down while the machine is locked or the display is asleep.
+Everything stands down while the machine is locked or the display is asleep. A
+settings window covers all of it — General, Modules, Weather, About — reachable
+from the menu bar, `⌘,`, or `islet settings`.
+
+Weather defaults to **on demand** rather than always-visible: a permanent
+readout would mean the island is never idle, and "invisible until something
+happens" is what makes it read as hardware rather than a widget stuck to the
+bezel. One toggle in Settings changes that.
 
 ## The part nothing else has
 
@@ -85,7 +93,8 @@ network can reach it. `islet` is a thin client over it; you can just as easily
 talk to it from Python, Node, or `nc`.
 
 Shortcuts and Siri get native actions too: **Show Activity in Notch**, **Remove
-Notch Activity**, **Clear the Notch**, and **Start a Notch Timer**.
+Notch Activity**, **Clear the Notch**, **Start a Notch Timer**, and **Show
+Weather in Notch**.
 
 ## Install
 
@@ -118,6 +127,8 @@ islet list         Show what's currently on the island.
 islet run -- <cmd> Run a command, showing progress; reports success or failure.
 islet timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
 islet shelf [files] Park files on the island. No arguments clears it.
+islet weather      Show current conditions on the island.
+islet settings     Open Settings. --tab general|modules|weather|about
 islet ping         Check that Islet.app is running.
 ```
 
@@ -164,6 +175,7 @@ Three prompts, each from one module, each declinable without affecting anything 
 - **Automation** (Music/Spotify) — Now Playing.
 - **Calendar** — the next-meeting module. Read-only.
 - **Downloads folder** — download tracking.
+- **Location** — weather, and only when you first ask for it. In on-demand mode nothing is requested until you use it, and you can type coordinates in by hand instead. They go to Open-Meteo and nowhere else.
 
 And three you will never see:
 

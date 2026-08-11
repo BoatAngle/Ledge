@@ -49,6 +49,7 @@ public enum NativeViewKind: String, Codable, Hashable, Sendable {
     case calendar
     case timer
     case download
+    case weather
     /// The shelf that opens when files are dragged to the notch.
     case dropZone
 }

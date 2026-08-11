@@ -13,6 +13,7 @@ import IsletCore
 public final class DownloadsProvider: SystemProvider {
     public let identifier = "system.downloads"
     public let displayName = "Downloads"
+    public let summary = "Downloads in progress, from any browser"
     /// Always offered.
     ///
     /// Deliberately does *not* stat the folder: reading `~/Downloads` is

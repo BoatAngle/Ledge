@@ -11,6 +11,7 @@ import IsletCore
 public final class BatteryProvider: SystemProvider {
     public let identifier = "system.battery"
     public let displayName = "Battery & Charging"
+    public let summary = "Charging, low battery, and full charge"
 
     /// Desktops have no internal battery, so there is nothing to report.
     public private(set) lazy var isAvailable: Bool = Self.readSnapshot() != nil

@@ -36,5 +36,6 @@ let package = Package(
 
         .testTarget(name: "IsletCoreTests", dependencies: ["IsletCore"]),
         .testTarget(name: "IsletUITests", dependencies: ["IsletUI"]),
+        .testTarget(name: "IsletModulesTests", dependencies: ["IsletModules"]),
     ]
 )

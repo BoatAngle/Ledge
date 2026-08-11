@@ -11,6 +11,7 @@ struct IslandHostView: View {
     var store: ActivityStore
     var metrics: IslandMetrics
     var shelf: DropShelf
+    var settings: IsletSettings
     var onFootprintChange: (CGSize) -> Void
 
     var body: some View {
@@ -19,6 +20,7 @@ struct IslandHostView: View {
                 store: store,
                 metrics: metrics,
                 shelf: shelf,
+                settings: settings,
                 onFootprintChange: onFootprintChange
             )
             Spacer(minLength: 0)
@@ -150,14 +152,16 @@ public final class IslandWindowController {
     public let shelf = DropShelf()
     private var outsideClickMonitor: Any?
     private let store: ActivityStore
+    private let settings: IsletSettings
     private var metrics: IslandMetrics
 
     /// Margin around the island inside the panel, giving the shadow and the
     /// metaball blur room to render.
     private let margin: CGFloat = 90
 
-    public init(store: ActivityStore) {
+    public init(store: ActivityStore, settings: IsletSettings = .shared) {
         self.store = store
+        self.settings = settings
         self.metrics = NSScreen.islandHost?.isletMetrics
             ?? .synthesized(screenWidth: 1512)
     }
@@ -224,6 +228,7 @@ public final class IslandWindowController {
                     store: store,
                     metrics: metrics,
                     shelf: shelf,
+                    settings: settings,
                     onFootprintChange: { _ in }
                 )
             )
@@ -242,7 +247,12 @@ public final class IslandWindowController {
     }
 
     private func makeRootView() -> IslandHostView {
-        IslandHostView(store: store, metrics: metrics, shelf: shelf) { [weak self] footprint in
+        IslandHostView(
+            store: store,
+            metrics: metrics,
+            shelf: shelf,
+            settings: settings
+        ) { [weak self] footprint in
             self?.hostingView?.footprint = footprint
         }
     }

@@ -11,6 +11,7 @@ import IsletCore
 public final class FocusProvider: SystemProvider {
     public let identifier = "system.focus"
     public let displayName = "Focus"
+    public let summary = "Which Focus is on"
     public var isAvailable: Bool { FileManager.default.fileExists(atPath: Self.databaseDirectory.path) }
 
     private static var databaseDirectory: URL {

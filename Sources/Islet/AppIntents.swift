@@ -139,6 +139,12 @@ struct IsletShortcuts: AppShortcutsProvider {
             shortTitle: "Start a Timer",
             systemImageName: "timer"
         )
+        AppShortcut(
+            intent: ShowWeatherIntent(),
+            phrases: ["Show the weather in \(.applicationName)"],
+            shortTitle: "Show Weather",
+            systemImageName: "cloud.sun"
+        )
     }
 }
 
@@ -173,5 +179,18 @@ struct StartTimerIntent: AppIntent {
             )
         )
         return .result(value: response.id ?? "")
+    }
+}
+
+struct ShowWeatherIntent: AppIntent {
+    static let title: LocalizedStringResource = "Show Weather in Notch"
+    static let description = IntentDescription(
+        "Shows current conditions on the island for a few seconds.",
+        categoryName: "Island"
+    )
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        let response = try send(IsletRequest(command: .weather))
+        return .result(value: response.message ?? "")
     }
 }

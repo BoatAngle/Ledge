@@ -10,6 +10,7 @@ import IsletCore
 public final class VolumeProvider: SystemProvider {
     public let identifier = "system.volume"
     public let displayName = "Sound & Output Device"
+    public let summary = "Volume changes and newly connected output devices"
     public var isAvailable: Bool { CoreAudioBridge.defaultOutputDevice() != nil }
 
     private weak var store: ActivityStore?

@@ -13,6 +13,7 @@ import IsletCore
 public final class TimerProvider: SystemProvider {
     public let identifier = "system.timer"
     public let displayName = "Timers"
+    public let summary = "Countdowns that chime and survive a restart"
     public let isAvailable = true
 
     public struct RunningTimer: Codable, Sendable, Identifiable {

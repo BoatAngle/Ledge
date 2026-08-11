@@ -37,6 +37,8 @@
 	<string>Islet shows your next meeting in the notch as it approaches, with a button to join. It only reads events; it never changes or shares them.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>Islet watches your Downloads folder for in-progress downloads so it can show their progress in the notch.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Islet uses your location only to look up local weather. The coordinates go to Open-Meteo and nowhere else, and you can set a location manually in Settings instead.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT licensed. Copyright © 2026 Harrison Braun.</string>
 </dict>

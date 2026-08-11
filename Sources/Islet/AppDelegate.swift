@@ -2,17 +2,26 @@ import AppKit
 import IsletCore
 import IsletModules
 import IsletUI
-import ServiceManagement
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = ActivityStore()
+    private let settings = IsletSettings.shared
     private let registry = ProviderRegistry()
     private lazy var windowController = IslandWindowController(store: store)
     private lazy var server = ActivityServer(store: store)
     private var statusItem: NSStatusItem?
     private var allProviders: [any SystemProvider] = []
     private var timerProvider: TimerProvider?
+    private var weatherProvider: WeatherProvider?
+    private lazy var settingsWindow = SettingsWindowController(
+        settings: settings,
+        modules: { [weak self] in self?.moduleInfo() ?? [] },
+        weatherProvider: { [weak self] in self?.weatherProvider },
+        onToggleModule: { [weak self] identifier, enabled in
+            self?.setModule(identifier, enabled: enabled)
+        }
+    )
     private lazy var lockMonitor = LockMonitor { [weak self] isLocked in
         // Providers stand down while the machine is locked; activities already
         // on the island (a running timer, say) stay exactly where they were.
@@ -34,13 +43,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.allProviders = ProviderRegistry.standard()
             self.registry.start(self.allProviders.filter(self.isEnabled), store: self.store)
             self.timerProvider = self.registry.providers.compactMap { $0 as? TimerProvider }.first
+            self.weatherProvider = self.registry.providers.compactMap { $0 as? WeatherProvider }.first
             self.server.timers = self.timerProvider
+            self.server.weather = self.weatherProvider
             self.lockMonitor.start()
             self.statusItem?.menu = self.buildMenu()
         }
 
         do {
             server.shelf = windowController.shelf
+            server.openSettings = { [weak self] tab in
+                self?.settingsWindow.show(tab: SettingsTab.named(tab))
+            }
             try server.start()
         } catch {
             // The island is still fully useful without the API — the built-in
@@ -107,24 +121,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         demo.target = self
         menu.addItem(demo)
 
-        let install = NSMenuItem(
-            title: "Copy CLI Install Command",
-            action: #selector(copyInstallCommand),
+        let weather = NSMenuItem(
+            title: "Show Weather",
+            action: #selector(showWeather),
             keyEquivalent: ""
         )
-        install.target = self
-        menu.addItem(install)
+        weather.target = self
+        weather.isEnabled = settings.weatherMode != .off
+        menu.addItem(weather)
 
         menu.addItem(.separator())
 
-        let login = NSMenuItem(
-            title: "Launch at Login",
-            action: #selector(toggleLaunchAtLogin),
-            keyEquivalent: ""
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(openSettings),
+            keyEquivalent: ","
         )
-        login.target = self
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        menu.addItem(login)
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Islet", action: #selector(quit), keyEquivalent: "q")
@@ -145,19 +159,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let identifier = sender.representedObject as? String,
               let provider = allProviders.first(where: { $0.identifier == identifier })
         else { return }
+        setModule(identifier, enabled: !isEnabled(provider))
+    }
 
-        let nowEnabled = !isEnabled(provider)
-        UserDefaults.standard.set(nowEnabled, forKey: Self.defaultsKey(for: identifier))
-        sender.state = nowEnabled ? .on : .off
-
-        // Simplest correct thing: restart the set. Providers are cheap to
-        // construct and this avoids partial-teardown bugs.
+    /// Enable or disable a module and restart the set.
+    ///
+    /// Restarting everything rather than starting/stopping the one provider:
+    /// they are cheap to construct, and this rules out partial-teardown bugs
+    /// where a stopped provider leaves an activity or a timer behind.
+    private func setModule(_ identifier: String, enabled: Bool) {
+        settings.setModule(identifier, enabled: enabled)
         registry.stop()
         allProviders = ProviderRegistry.standard()
         registry.start(allProviders.filter(isEnabled), store: store)
         timerProvider = registry.providers.compactMap { $0 as? TimerProvider }.first
+        weatherProvider = registry.providers.compactMap { $0 as? WeatherProvider }.first
         server.timers = timerProvider
+        server.weather = weatherProvider
         statusItem?.menu = buildMenu()
+        settingsWindow.refresh()
+    }
+
+    private func moduleInfo() -> [ModuleInfo] {
+        allProviders.map {
+            ModuleInfo(
+                id: $0.identifier,
+                name: $0.displayName,
+                isAvailable: $0.isAvailable,
+                summary: $0.summary
+            )
+        }
+    }
+
+    @objc private func openSettings() {
+        settingsWindow.show()
+    }
+
+    @objc private func showWeather() {
+        weatherProvider?.showNow()
+    }
+
+    @objc private func openWeatherSettings() {
+        settingsWindow.show(tab: .weather)
     }
 
     private func timerMenuItem() -> NSMenuItem {
@@ -235,54 +278,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    @objc private func copyInstallCommand() {
-        let binary = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Helpers/islet").path
-        let command = "sudo ln -sf \"\(binary)\" /usr/local/bin/islet"
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(command, forType: .string)
-
-        let alert = NSAlert()
-        alert.messageText = "Install command copied"
-        alert.informativeText = """
-        Paste this into Terminal to put `islet` on your PATH:
-
-        \(command)
-
-        It creates a symlink to the CLI inside Islet.app — nothing is \
-        downloaded, and you can read the command before you run it.
-        """
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
-
-    @objc private func toggleLaunchAtLogin() {
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            NSLog("[Islet] launch at login: \(error)")
-        }
-        statusItem?.menu = buildMenu()
-    }
-
     @objc private func quit() {
         NSApplication.shared.terminate(nil)
     }
 
     // MARK: - Preferences
 
-    private static func defaultsKey(for identifier: String) -> String {
-        "module.\(identifier).enabled"
-    }
-
-    /// Modules are on unless the user has turned them off.
     private func isEnabled(_ provider: any SystemProvider) -> Bool {
-        let key = Self.defaultsKey(for: provider.identifier)
-        if UserDefaults.standard.object(forKey: key) == nil { return true }
-        return UserDefaults.standard.bool(forKey: key)
+        settings.isModuleEnabled(provider.identifier)
     }
 }

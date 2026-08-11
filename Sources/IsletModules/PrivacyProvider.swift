@@ -12,6 +12,7 @@ import IsletCore
 public final class PrivacyProvider: SystemProvider {
     public let identifier = "system.privacy"
     public let displayName = "Camera & Microphone"
+    public let summary = "When something starts using the camera or microphone"
     public let isAvailable = true
 
     private weak var store: ActivityStore?

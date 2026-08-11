@@ -67,6 +67,7 @@ enum MediaPlayer: String, CaseIterable, Sendable {
 public final class MediaProvider: SystemProvider {
     public let identifier = "system.media"
     public let displayName = "Now Playing"
+    public let summary = "What's playing in Music or Spotify, with controls"
     public let isAvailable = true
 
     private weak var store: ActivityStore?

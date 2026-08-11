@@ -104,7 +104,7 @@ public final class ActivityStore {
     /// Convenience for the built-in modules: post a HUD that retires itself.
     public func flash(
         id: String,
-        nativeView: NativeViewKind,
+        nativeView: NativeViewKind? = nil,
         content: ActivityContent,
         priority: ActivityPriority = .system,
         dwell: TimeInterval = ActivityStore.transientDwell

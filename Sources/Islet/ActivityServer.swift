@@ -26,6 +26,10 @@ final class ActivityServer {
     /// the provider rather than synthesised from an activity here.
     weak var timers: TimerProvider?
     weak var shelf: DropShelf?
+    weak var weather: WeatherProvider?
+    /// Opens the settings window. Set by the app delegate.
+    /// Opens the settings window at a named tab.
+    var openSettings: ((String?) -> Void)?
     private var listenDescriptor: Int32 = -1
     private var acceptSource: DispatchSourceRead?
     /// Identity of the socket file we created, so shutdown can tell ours apart
@@ -212,6 +216,27 @@ final class ActivityServer {
             guard !urls.isEmpty else { return .failure("None of those paths exist.") }
             shelf.accept(urls)
             return IsletResponse(ok: true, count: shelf.files.count)
+
+        case .weather:
+            guard let weather else {
+                return .failure("The weather module is turned off.")
+            }
+            weather.showNow()
+            guard let reading = weather.latest else {
+                // Not an error: the first call usually arrives before the first
+                // fetch has landed.
+                return IsletResponse(ok: true, message: "Fetching…")
+            }
+            return IsletResponse(
+                ok: true,
+                message: "\(reading.condition.summary), \(Int(reading.temperature.rounded()))°"
+            )
+
+        case .settings:
+            guard let openSettings else { return .failure("Settings aren't available.") }
+            // `id` carries the tab name for this command.
+            openSettings(request.id)
+            return IsletResponse(ok: true, message: "opened")
         }
     }
 

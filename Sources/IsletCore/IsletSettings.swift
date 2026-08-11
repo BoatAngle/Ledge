@@ -1,0 +1,227 @@
+import Foundation
+import Observation
+
+/// How much of the island the weather module is allowed to occupy.
+public enum WeatherMode: String, Codable, CaseIterable, Sendable {
+    /// Never posts anything.
+    case off
+    /// Shows for a few seconds when asked — the menu bar, `islet weather`, or
+    /// a Shortcut.
+    case onDemand
+    /// Sits on the island permanently, at the lowest priority, so anything
+    /// actually happening takes precedence.
+    case ambient
+
+    public var label: String {
+        switch self {
+        case .off: return "Off"
+        case .onDemand: return "On demand"
+        case .ambient: return "Always visible"
+        }
+    }
+
+    public var explanation: String {
+        switch self {
+        case .off:
+            return "Weather is never fetched."
+        case .onDemand:
+            return "Shows briefly when you ask for it. The island stays empty otherwise."
+        case .ambient:
+            return "Always on the island when nothing else is happening."
+        }
+    }
+}
+
+public enum TemperatureUnit: String, Codable, CaseIterable, Sendable {
+    case celsius
+    case fahrenheit
+
+    public var label: String {
+        switch self {
+        case .celsius: return "Celsius"
+        case .fahrenheit: return "Fahrenheit"
+        }
+    }
+
+    public var suffix: String {
+        switch self {
+        case .celsius: return "°C"
+        case .fahrenheit: return "°F"
+        }
+    }
+
+    /// What the user's region uses, so the default is right without asking.
+    public static var localeDefault: TemperatureUnit {
+        Locale.current.measurementSystem == .us ? .fahrenheit : .celsius
+    }
+}
+
+public enum WeatherLocationMode: String, Codable, CaseIterable, Sendable {
+    case automatic
+    case manual
+
+    public var label: String {
+        switch self {
+        case .automatic: return "Use my location"
+        case .manual: return "Set manually"
+        }
+    }
+}
+
+/// Every user-facing preference, in one observable place.
+///
+/// Values are held in memory and written through to `UserDefaults`, rather than
+/// read from it on access: `@Observable` can only track stored properties, and
+/// a computed property reading `UserDefaults` would leave the settings window
+/// showing stale values.
+@MainActor
+@Observable
+public final class IsletSettings {
+    public static let shared = IsletSettings()
+
+    private let defaults: UserDefaults
+
+    // MARK: Interaction
+
+    /// Whether resting the cursor on the island opens the panel.
+    public var expandOnHover: Bool {
+        didSet { defaults.set(expandOnHover, forKey: Keys.expandOnHover) }
+    }
+
+    /// Milliseconds the cursor must rest before the panel opens.
+    public var hoverDelay: Double {
+        didSet { defaults.set(hoverDelay, forKey: Keys.hoverDelay) }
+    }
+
+    /// Draw a virtual island on displays with no camera housing.
+    public var showOnNotchlessDisplays: Bool {
+        didSet { defaults.set(showOnNotchlessDisplays, forKey: Keys.showOnNotchless) }
+    }
+
+    /// Play the small bounce when an activity arrives.
+    public var animateArrivals: Bool {
+        didSet { defaults.set(animateArrivals, forKey: Keys.animateArrivals) }
+    }
+
+    // MARK: Weather
+
+    public var weatherMode: WeatherMode {
+        didSet { defaults.set(weatherMode.rawValue, forKey: Keys.weatherMode) }
+    }
+
+    public var temperatureUnit: TemperatureUnit {
+        didSet { defaults.set(temperatureUnit.rawValue, forKey: Keys.temperatureUnit) }
+    }
+
+    public var weatherLocationMode: WeatherLocationMode {
+        didSet { defaults.set(weatherLocationMode.rawValue, forKey: Keys.weatherLocationMode) }
+    }
+
+    public var manualLatitude: Double {
+        didSet { defaults.set(manualLatitude, forKey: Keys.manualLatitude) }
+    }
+
+    public var manualLongitude: Double {
+        didSet { defaults.set(manualLongitude, forKey: Keys.manualLongitude) }
+    }
+
+    public var manualPlaceName: String {
+        didSet { defaults.set(manualPlaceName, forKey: Keys.manualPlaceName) }
+    }
+
+    /// Flash the island when rain or snow starts.
+    public var weatherAlerts: Bool {
+        didSet { defaults.set(weatherAlerts, forKey: Keys.weatherAlerts) }
+    }
+
+    // MARK: Init
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+
+        expandOnHover = defaults.object(forKey: Keys.expandOnHover) as? Bool ?? true
+        hoverDelay = defaults.object(forKey: Keys.hoverDelay) as? Double ?? 220
+        showOnNotchlessDisplays = defaults.object(forKey: Keys.showOnNotchless) as? Bool ?? true
+        animateArrivals = defaults.object(forKey: Keys.animateArrivals) as? Bool ?? true
+
+        // On-demand rather than always-visible by default. A permanent readout
+        // would mean the island is never actually idle, and "invisible until
+        // something happens" is the property that makes it read as hardware
+        // rather than as a widget stuck to the bezel. One toggle away.
+        weatherMode = (defaults.string(forKey: Keys.weatherMode)
+            .flatMap(WeatherMode.init(rawValue:))) ?? .onDemand
+        temperatureUnit = (defaults.string(forKey: Keys.temperatureUnit)
+            .flatMap(TemperatureUnit.init(rawValue:))) ?? .localeDefault
+        weatherLocationMode = (defaults.string(forKey: Keys.weatherLocationMode)
+            .flatMap(WeatherLocationMode.init(rawValue:))) ?? .automatic
+        manualLatitude = defaults.object(forKey: Keys.manualLatitude) as? Double ?? 0
+        manualLongitude = defaults.object(forKey: Keys.manualLongitude) as? Double ?? 0
+        manualPlaceName = defaults.string(forKey: Keys.manualPlaceName) ?? ""
+        weatherAlerts = defaults.object(forKey: Keys.weatherAlerts) as? Bool ?? false
+    }
+
+    // MARK: Modules
+
+    /// Modules are on unless the user has turned them off.
+    public func isModuleEnabled(_ identifier: String) -> Bool {
+        let key = Keys.module(identifier)
+        guard defaults.object(forKey: key) != nil else { return true }
+        return defaults.bool(forKey: key)
+    }
+
+    public func setModule(_ identifier: String, enabled: Bool) {
+        defaults.set(enabled, forKey: Keys.module(identifier))
+        // Stored separately from the observable properties above, so nudge
+        // observers explicitly — the settings window needs to redraw.
+        moduleRevision &+= 1
+    }
+
+    /// Bumped whenever a module is toggled, purely so `@Observable` has a
+    /// stored property to notice.
+    public private(set) var moduleRevision: UInt64 = 0
+
+    public func resetToDefaults() {
+        for key in Keys.all { defaults.removeObject(forKey: key) }
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("module.") {
+            defaults.removeObject(forKey: key)
+        }
+        expandOnHover = true
+        hoverDelay = 220
+        showOnNotchlessDisplays = true
+        animateArrivals = true
+        weatherMode = .onDemand
+        temperatureUnit = .localeDefault
+        weatherLocationMode = .automatic
+        manualLatitude = 0
+        manualLongitude = 0
+        manualPlaceName = ""
+        weatherAlerts = false
+        moduleRevision &+= 1
+    }
+
+    enum Keys {
+        static let expandOnHover = "interaction.expandOnHover"
+        static let hoverDelay = "interaction.hoverDelay"
+        static let showOnNotchless = "interaction.showOnNotchlessDisplays"
+        static let animateArrivals = "interaction.animateArrivals"
+        static let weatherMode = "weather.mode"
+        static let temperatureUnit = "weather.temperatureUnit"
+        static let weatherLocationMode = "weather.locationMode"
+        static let manualLatitude = "weather.manualLatitude"
+        static let manualLongitude = "weather.manualLongitude"
+        static let manualPlaceName = "weather.manualPlaceName"
+        static let weatherAlerts = "weather.alerts"
+
+        /// Unchanged from the original ad-hoc key so existing preferences
+        /// survive the move into this type.
+        static func module(_ identifier: String) -> String {
+            "module.\(identifier).enabled"
+        }
+
+        static let all = [
+            expandOnHover, hoverDelay, showOnNotchless, animateArrivals,
+            weatherMode, temperatureUnit, weatherLocationMode,
+            manualLatitude, manualLongitude, manualPlaceName, weatherAlerts,
+        ]
+    }
+}

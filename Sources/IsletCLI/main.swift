@@ -29,6 +29,8 @@ do {
     case "run":             try run()
     case "timer":           try timer()
     case "shelf":           try shelf()
+    case "weather":         try weather()
+    case "settings":        try openSettings()
     case "help":            printUsage()
     default:
         FileHandle.standardError.write(Data("Unknown command \"\(subcommand)\".\n\n".utf8))
@@ -99,6 +101,18 @@ func list() throws {
             .map { " \(Int($0 * 100))%" } ?? ""
         print("\(activity.id)\t[\(activity.source)]\t\(activity.content.title)\(progress)")
     }
+}
+
+/// `islet settings` — bring up the settings window.
+func openSettings() throws {
+    try client.send(IsletRequest(command: .settings, id: parsed.string("tab")))
+    emit(["ok": true], plain: "opened")
+}
+
+/// `islet weather` — show current conditions on the island.
+func weather() throws {
+    let response = try client.send(IsletRequest(command: .weather))
+    emit(["summary": response.message ?? ""], plain: response.message ?? "shown")
 }
 
 /// `islet shelf a.png b.png` — park files on the island, or clear it.
@@ -336,6 +350,8 @@ func printUsage() {
       run -- <cmd> Run a command, showing progress; reports success or failure.
       timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
       shelf [files] Park files on the island to drag out later. No args clears.
+      weather      Show current conditions on the island.
+      settings     Open the settings window. --tab general|modules|weather|about
       ping         Check that Islet.app is running.
 
     CONTENT

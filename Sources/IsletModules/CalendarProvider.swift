@@ -12,6 +12,7 @@ import IsletCore
 public final class CalendarProvider: SystemProvider {
     public let identifier = "system.calendar"
     public let displayName = "Calendar & Events"
+    public let summary = "Your next meeting, with a button to join it"
 
     /// Hidden only when the user has actively said no.
     public var isAvailable: Bool {
