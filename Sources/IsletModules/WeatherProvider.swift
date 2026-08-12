@@ -102,6 +102,17 @@ public final class WeatherProvider: SystemProvider {
         }
     }
 
+    /// Fetch fresh conditions now and hand them back.
+    ///
+    /// For callers that need the result — the settings window's Check Now
+    /// button awaits this instead of guessing at latency with a sleep.
+    /// Doesn't flash the island; that remains `showNow()`'s job.
+    public func refresh() async -> WeatherSnapshot? {
+        guard settings.weatherMode != .off else { return nil }
+        await fetch(force: true)
+        return snapshot
+    }
+
     // MARK: - Fetching
 
     private func refresh(force: Bool = false) {

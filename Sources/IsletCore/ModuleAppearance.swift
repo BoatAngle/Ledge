@@ -12,8 +12,8 @@ public enum ModuleSlot: String, Codable, CaseIterable, Hashable, Sendable {
     public var label: String {
         switch self {
         case .automatic: return "Automatic"
-        case .leading: return "Prefer front"
-        case .minimal: return "Prefer the small circle"
+        case .leading: return "Front"
+        case .minimal: return "Small circle"
         }
     }
 

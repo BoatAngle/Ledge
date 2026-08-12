@@ -209,16 +209,47 @@ out.png` renders every mark in both weights, side by side. That comparison is
 the point — it's how you see whether a solid mark still reads as the same idea
 as its outline.
 
-## Settings deep links
+## The settings window
 
-`islet settings --tab weather` and `islet settings --customize system.media`
-exist partly because synthetic clicks on a SwiftUI `TabView` tab bar and on
-`Form` row buttons do not reliably register on a non-key window. They are real
-features, and also the only practical way to screenshot those surfaces.
+The chrome is an `NSTabViewController` with `tabStyle = .toolbar` — the native
+settings idiom. SwiftUI's `TabView` in a plain window renders a centered
+segmented control instead, and its tab bar doesn't take synthetic clicks.
+The window title is the selected pane's name; each pane has a fixed
+`.frame(width: 540, height: …)` and its `NSHostingController` publishes it via
+`sizingOptions = [.preferredContentSize]`, which is what animates the window
+height between panes.
 
-## Not yet built
+Rules that keep it behaving like an object rather than a screenshot:
 
-Weather, a settings window, and per-module customisation (colours, sizes,
-positions). Each new module is a `SystemProvider` conformance plus a
-`NativeViewKind` case; `BatteryProvider` is the simplest complete example, and
-`TimerProvider` shows the pattern for one that owns state and persists it.
+- **The window is built once and never rebuilt.** Deep links flow through
+  `SettingsSession` (`@Observable`); the Modules pane watches
+  `session.customizing` in `.onAppear`/`.onChange`. Panes register
+  UserDefaults-backed state by *reading* `settings.moduleRevision` /
+  `appearanceRevision` in `body` — never with an `.id(...)` identity reset,
+  and `AppDelegate.setModule` must not poke the window (the old `refresh()`
+  teleported an open window to the Modules tab).
+- **The app installs a real main menu** even though it's LSUIElement. The
+  window promotes the activation policy to `.regular`; with no main menu that
+  means an empty menu bar and dead ⌘V/⌘C/⌘W in every field.
+- **Grouped-Form section footers align trailing by default on macOS.** Every
+  footer goes through `SettingsFooter`, which pins the conventional leading
+  block. Easy to miss because a one-line footer looks nearly right.
+- The design boundary, stated at the top of `SettingsView.swift`: window
+  chrome speaks macOS (SF Symbols, standard controls); anything depicting
+  island content speaks Islet (glyph chips, island previews).
+- The customization sheet pins its island preview *outside* the scrolling
+  Form, so the thing being tuned never scrolls away.
+
+`islet settings --tab <name>` and `--customize <module-id>` are real features
+and also the only practical way to screenshot these surfaces. A useful side
+effect: `--customize` with an unknown id resolves `editing` to nil, which
+*closes* an open sheet — the reliable way to dismiss it from a script, since
+synthetic clicks on a non-key window's buttons still don't register.
+
+## Adding a module
+
+Each new module is a `SystemProvider` conformance plus a `NativeViewKind` case;
+`BatteryProvider` is the simplest complete example, and `TimerProvider` shows
+the pattern for one that owns state and persists it. Weather, the settings
+window, and per-module customisation are all built — the sections above
+describe how they work.

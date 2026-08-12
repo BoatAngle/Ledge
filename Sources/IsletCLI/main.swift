@@ -371,7 +371,7 @@ func printUsage() {
       collapse     Close the panel.
       settings     Open the settings window.
                    --tab general|modules|weather|about
-                   --customize <module-id>  jump to a module's colour/size/position
+                   --customize <module-id>  jump to a module's color/size/position
       ping         Check that Islet.app is running.
 
     CONTENT

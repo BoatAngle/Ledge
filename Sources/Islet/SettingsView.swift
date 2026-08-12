@@ -5,15 +5,35 @@ import IsletUI
 import ServiceManagement
 import SwiftUI
 
-/// What the Modules tab needs to know about a provider.
+// The design boundary for this window: the window CHROME speaks macOS —
+// SF Symbols in the toolbar tabs, info.circle affordances, standard buttons —
+// while anything DEPICTING island content speaks Islet: glyph chips, island
+// previews, the weather readout. Don't convert the chrome to the glyph family,
+// and don't let SF Symbols stand in for what the island would draw.
+
+/// What the Modules pane needs to know about a provider.
 struct ModuleInfo: Identifiable, Hashable {
     var id: String
     var name: String
     var isAvailable: Bool
     var summary: String
+    var group: ModuleGroup = .system
 }
 
-/// The settings window's sections, addressable by name so `islet settings
+/// The two kinds of thing a module puts on the island: ongoing activities
+/// with a lifetime, and system state that flashes or idles.
+enum ModuleGroup: CaseIterable {
+    case activities, system
+
+    var title: String {
+        switch self {
+        case .activities: return "Activities"
+        case .system: return "System"
+        }
+    }
+}
+
+/// The settings window's panes, addressable by name so `islet settings
 /// --tab weather` can jump straight to one.
 enum SettingsTab: String, CaseIterable {
     case general, modules, weather, about
@@ -22,67 +42,118 @@ enum SettingsTab: String, CaseIterable {
         guard let raw else { return .general }
         return SettingsTab(rawValue: raw.lowercased()) ?? .general
     }
+
+    var title: String { rawValue.capitalized }
+
+    var symbol: String {
+        switch self {
+        case .general: return "gearshape"
+        case .modules: return "square.grid.2x2"
+        case .weather: return "cloud.sun"
+        case .about: return "info.circle"
+        }
+    }
 }
 
-struct SettingsView: View {
-    @Bindable var settings: IsletSettings
-    @State var tab: SettingsTab = .general
-    /// Module to open the customization sheet for straight away, from
-    /// `islet settings --customize system.media`.
-    var customizing: String?
-    var modules: [ModuleInfo]
-    var weatherProvider: WeatherProvider?
-    var onToggleModule: (String, Bool) -> Void
-    var cliPath: String
+/// Grouped-form section footers align trailing by default on macOS; every
+/// footer in this window wants the conventional leading block instead.
+struct SettingsFooter: View {
+    var text: String
+
+    init(_ text: String) { self.text = text }
 
     var body: some View {
-        TabView(selection: $tab) {
-            GeneralSettings(settings: settings)
-                .tabItem { Label("General", systemImage: "gearshape") }
-                .tag(SettingsTab.general)
+        Text(text)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
 
-            ModuleSettings(
-                settings: settings,
-                modules: modules,
-                customizing: customizing,
-                onToggle: onToggleModule
-            )
-            .tabItem { Label("Modules", systemImage: "square.grid.2x2") }
-            .tag(SettingsTab.modules)
-
-            WeatherSettings(settings: settings, provider: weatherProvider)
-                .tabItem { Label("Weather", systemImage: "cloud.sun") }
-                .tag(SettingsTab.weather)
-
-            AboutSettings(cliPath: cliPath)
-                .tabItem { Label("About", systemImage: "info.circle") }
-                .tag(SettingsTab.about)
-        }
-        .frame(width: 540, height: 440)
+/// "Customized" marker, shared between the module list and the sheet header.
+struct CustomizedBadge: View {
+    var body: some View {
+        Text("Customized")
+            .font(.caption2.weight(.medium))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.accentColor.opacity(0.16)))
+            .foregroundStyle(Color.accentColor)
     }
 }
 
 // MARK: - General
 
-private struct GeneralSettings: View {
+struct GeneralSettings: View {
     @Bindable var settings: IsletSettings
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @State private var confirmingReset = false
 
-    /// A representative activity so the theme picker shows a real island
-    /// rather than an abstract swatch.
+    /// A representative activity so theme cards show a real island rather
+    /// than an abstract swatch. All four cards render the same one, so the
+    /// four positions are directly comparable.
     private var themeSample: Activity {
         ModulePreviewSample.activity(for: "system.timer")
-    }
-
-    private var themeSampleStyle: ActivityStyle {
-        ActivityStyle.resolve(themeSample, appearance: nil)
     }
 
     var body: some View {
         Form {
             Section {
-                Toggle("Launch Islet at login", isOn: $launchAtLogin)
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 10),
+                        GridItem(.flexible(), spacing: 10),
+                    ],
+                    spacing: 10
+                ) {
+                    ForEach(IslandThemeID.allCases, id: \.self) { id in
+                        ThemeCard(
+                            id: id,
+                            isSelected: settings.theme == id,
+                            sample: themeSample
+                        ) {
+                            settings.theme = id
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            } header: {
+                Text("Theme")
+            } footer: {
+                // A minimum height so the layout doesn't jump between one-
+                // and two-line explanations as the selection changes.
+                SettingsFooter(settings.theme.explanation)
+                    .frame(minHeight: 28, alignment: .topLeading)
+            }
+
+            Section("Interaction") {
+                Toggle("Expand when the pointer rests on the island", isOn: $settings.expandOnHover)
+
+                Slider(value: hoverDelay, in: 0...800) {
+                    Text("Delay")
+                } minimumValueLabel: {
+                    Text("Short")
+                } maximumValueLabel: {
+                    Text("Long")
+                }
+                .disabled(!settings.expandOnHover)
+
+                Toggle("Bounce the island when something arrives", isOn: $settings.animateArrivals)
+            }
+
+            Section {
+                Toggle(
+                    "Show an island on displays without a notch",
+                    isOn: $settings.showOnNotchlessDisplays
+                )
+            } header: {
+                Text("Displays")
+            } footer: {
+                SettingsFooter("Applies to external displays and Macs without a camera housing. Takes effect the next time Islet opens.")
+            }
+
+            Section {
+                Toggle("Open Islet at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         setLaunchAtLogin(newValue)
                     }
@@ -91,61 +162,36 @@ private struct GeneralSettings: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-            }
 
-            Section("Appearance") {
-                Picker("Theme", selection: $settings.theme) {
-                    ForEach(IslandThemeID.allCases, id: \.self) { id in
-                        Text(id.label).tag(id)
+                Button("Reset All Settings…", role: .destructive) {
+                    confirmingReset = true
+                }
+                .confirmationDialog(
+                    "Reset All Settings?",
+                    isPresented: $confirmingReset
+                ) {
+                    Button("Reset All Settings", role: .destructive) {
+                        settings.resetToDefaults()
+                        launchAtLogin = SMAppService.mainApp.status == .enabled
                     }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-
-                Text(settings.theme.explanation)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                IslandPreviewStage {
-                    IslandStylePreview(activity: themeSample, style: themeSampleStyle)
-                }
-                .islandTheme(.preset(settings.theme))
-            }
-
-            Section("Interaction") {
-                Toggle("Expand when the cursor rests on the island", isOn: $settings.expandOnHover)
-
-                HStack {
-                    Text("Hover delay")
-                    Slider(value: $settings.hoverDelay, in: 0...800, step: 20)
-                        .disabled(!settings.expandOnHover)
-                    Text("\(Int(settings.hoverDelay)) ms")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .frame(width: 60, alignment: .trailing)
-                }
-
-                Toggle("Bounce the island when something arrives", isOn: $settings.animateArrivals)
-            }
-
-            Section("Displays") {
-                Toggle(
-                    "Draw a virtual island on displays without a notch",
-                    isOn: $settings.showOnNotchlessDisplays
-                )
-                Text("Applies to external monitors and Macs older than 2021. Takes effect next launch.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Button("Reset all settings", role: .destructive) {
-                    settings.resetToDefaults()
-                    launchAtLogin = SMAppService.mainApp.status == .enabled
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This returns every setting, module, and customization to its defaults. You can't undo this.")
                 }
             }
         }
         .formStyle(.grouped)
+        .frame(width: 540, height: 700)
+    }
+
+    /// Quantized in the binding rather than with `step:` — a stepped slider
+    /// draws a 41-tick comb across the row, which Apple's timing sliders
+    /// (Key Repeat, Double-Click Speed) never do.
+    private var hoverDelay: Binding<Double> {
+        Binding(
+            get: { settings.hoverDelay },
+            set: { settings.hoverDelay = ($0 / 20).rounded() * 20 }
+        )
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
@@ -160,48 +206,112 @@ private struct GeneralSettings: View {
             // Revert the toggle rather than leaving it showing a state the
             // system didn't accept.
             launchAtLogin = SMAppService.mainApp.status == .enabled
-            loginError = "Couldn't change this: \(error.localizedDescription)"
+            loginError = "Islet couldn't change this setting. \(error.localizedDescription)"
         }
+    }
+}
+
+/// One selectable theme, shown as the thing it produces: a miniature island
+/// rendered in that theme, on a strip of screen.
+private struct ThemeCard: View {
+    var id: IslandThemeID
+    var isSelected: Bool
+    var sample: Activity
+    var select: () -> Void
+
+    private var style: ActivityStyle {
+        ActivityStyle.resolve(sample, appearance: nil)
+    }
+
+    var body: some View {
+        Button(action: select) {
+            VStack(spacing: 7) {
+                IslandPreviewStage {
+                    // The full preview is ~330pt wide; thumbnail it so two
+                    // cards fit side by side. scaleEffect doesn't change
+                    // layout size, so the frame after it does the fitting.
+                    IslandStylePreview(activity: sample, style: style)
+                        .scaleEffect(0.55, anchor: .top)
+                        .frame(width: 184, height: 24)
+                }
+                .islandTheme(.preset(id))
+
+                Text(id.label)
+                    .font(.callout)
+                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+            }
+            .padding(7)
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? Color.accentColor : Color.primary.opacity(0.12),
+                        lineWidth: isSelected ? 2 : 0.5
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(id.label))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
 // MARK: - Modules
 
-private struct ModuleSettings: View {
+struct ModuleSettings: View {
     @Bindable var settings: IsletSettings
-    var modules: [ModuleInfo]
-    var customizing: String?
+    var session: SettingsSession
+    var modules: () -> [ModuleInfo]
     var onToggle: (String, Bool) -> Void
 
     @State private var editing: ModuleInfo?
 
     var body: some View {
+        // Read the revisions so @Observable registers dependencies on state
+        // that actually lives in UserDefaults. This replaces the old `.id(...)`
+        // identity reset, which rebuilt the whole Form — and its scroll
+        // position — on every slider release in the customization sheet.
+        let _ = settings.moduleRevision
+        let _ = settings.appearanceRevision
+        let all = modules()
+
         Form {
-            Section {
-                ForEach(modules) { module in
-                    row(module)
+            ForEach(ModuleGroup.allCases, id: \.self) { group in
+                let members = all.filter { $0.group == group }
+                if !members.isEmpty {
+                    if group == ModuleGroup.allCases.last {
+                        Section {
+                            ForEach(members) { row($0) }
+                        } header: {
+                            Text(group.title)
+                        } footer: {
+                            SettingsFooter("Turn off anything you don't want on the island. Dimmed modules aren't available on this Mac, or Islet doesn't have permission to use them.")
+                        }
+                    } else {
+                        Section(group.title) {
+                            ForEach(members) { row($0) }
+                        }
+                    }
                 }
-            } header: {
-                Text("Turn off anything you don't want on the island, or open the sliders to change how it looks.")
-            } footer: {
-                Text("Greyed-out modules aren't supported on this Mac, or a permission was declined.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        // `moduleRevision` and `appearanceRevision` are the observable stand-ins
-        // for state that lives in UserDefaults rather than stored properties.
-        .id("\(settings.moduleRevision)-\(settings.appearanceRevision)")
+        .frame(width: 540, height: 600)
         .sheet(item: $editing) { module in
             ModuleCustomizationSheet(module: module, settings: settings) {
                 editing = nil
             }
         }
-        .onAppear {
-            guard let customizing else { return }
-            editing = modules.first { $0.id == customizing }
-        }
+        .onAppear { openRequestedCustomizer() }
+        .onChange(of: session.customizing) { _, _ in openRequestedCustomizer() }
+    }
+
+    /// Honours `islet settings --customize <id>` whether the pane is being
+    /// shown fresh or is already on screen.
+    private func openRequestedCustomizer() {
+        guard let id = session.customizing else { return }
+        session.customizing = nil
+        editing = modules().first { $0.id == id }
     }
 
     private func row(_ module: ModuleInfo) -> some View {
@@ -209,60 +319,90 @@ private struct ModuleSettings: View {
         let isEnabled = settings.isModuleEnabled(module.id)
 
         return HStack(spacing: 10) {
-            Toggle(isOn: Binding(
-                get: { isEnabled },
-                set: { onToggle(module.id, $0) }
-            )) {
-                HStack(spacing: 9) {
-                    swatch(module, appearance: appearance)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(module.name)
-                            if !appearance.isDefault {
-                                Text("Customised")
-                                    .font(.caption2.weight(.medium))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 1.5)
-                                    .background(Capsule().fill(Color.accentColor.opacity(0.16)))
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                        }
-                        Text(module.isAvailable ? module.summary : "Not available on this Mac")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            ModuleIconChip(module: module, appearance: appearance)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(module.name)
+                    if !appearance.isDefault {
+                        CustomizedBadge()
                     }
                 }
+                Text(module.isAvailable ? module.summary : "Not available on this Mac")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+
+            Spacer()
 
             Button {
                 editing = module
             } label: {
-                Image(systemName: "slider.horizontal.3")
+                Image(systemName: "info.circle")
             }
             .buttonStyle(.borderless)
-            .help("Colour, size, and position")
+            .foregroundStyle(.secondary)
+            .help("Color, size, and position")
             .disabled(!module.isAvailable || !isEnabled)
+
+            Toggle(module.name, isOn: Binding(
+                get: { settings.isModuleEnabled(module.id) },
+                set: { onToggle(module.id, $0) }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .controlSize(.small)
+            .disabled(!module.isAvailable)
         }
         .disabled(!module.isAvailable)
     }
+}
 
-    /// The module's effective colour, so the list shows overrides at a glance.
-    private func swatch(_ module: ModuleInfo, appearance: ModuleAppearance) -> some View {
-        let sample = ModulePreviewSample.activity(for: module.id)
+/// The module's own mark, drawn white on its effective tint — the System
+/// Settings row grammar, spoken in Islet's glyph family. The chip doubles as
+/// the color swatch: a tint override is visible at a glance.
+private struct ModuleIconChip: View {
+    @Environment(\.islandTheme) private var theme
+    var module: ModuleInfo
+    var appearance: ModuleAppearance
+
+    private var sample: Activity { ModulePreviewSample.activity(for: module.id) }
+
+    private var fill: Color {
+        guard module.isAvailable else { return Color(nsColor: .quaternaryLabelColor) }
         let color = appearance.tint ?? sample.content.tint ?? .accent
-        return Circle()
-            .fill(Color(color))
-            .frame(width: 10, height: 10)
-            .overlay { Circle().strokeBorder(.white.opacity(0.25), lineWidth: 0.5) }
+        return Color(color)
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+            .fill(fill)
+            .frame(width: 26, height: 26)
+            .overlay { mark }
+    }
+
+    @ViewBuilder
+    private var mark: some View {
+        let ink: Color = module.isAvailable ? .white : .secondary
+        if case .symbol(let name) = sample.content.icon,
+           let glyph = IsletGlyph.mapping(for: name) {
+            IsletGlyphView(glyph: glyph, size: 15, tint: ink, lineWidth: 2.0, weight: .solid)
+        } else if case .symbol(let name) = sample.content.icon {
+            // Future modules whose mark isn't in the family yet.
+            Image(systemName: name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(ink)
+        }
     }
 }
 
 // MARK: - Weather
 
-private struct WeatherSettings: View {
+struct WeatherSettings: View {
     @Bindable var settings: IsletSettings
-    var provider: WeatherProvider?
+    var provider: () -> WeatherProvider?
     @State private var reading: WeatherSnapshot?
+    @State private var isChecking = false
 
     var body: some View {
         Form {
@@ -273,103 +413,149 @@ private struct WeatherSettings: View {
                     }
                 }
                 .pickerStyle(.segmented)
-
-                Text(settings.weatherMode.explanation)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } footer: {
+                SettingsFooter(settings.weatherMode.explanation)
             }
 
-            if settings.weatherMode != .off {
-                Section {
-                    Picker("Units", selection: $settings.temperatureUnit) {
-                        ForEach(TemperatureUnit.allCases, id: \.self) { unit in
-                            Text(unit.label).tag(unit)
-                        }
-                    }
-                    Toggle("Tell me when rain or snow starts", isOn: $settings.weatherAlerts)
-                }
-
-                Section("Location") {
-                    Picker("Location", selection: $settings.weatherLocationMode) {
-                        ForEach(WeatherLocationMode.allCases, id: \.self) { mode in
-                            Text(mode.label).tag(mode)
-                        }
-                    }
-                    .labelsHidden()
-
-                    if settings.weatherLocationMode == .manual {
-                        TextField("Place name", text: $settings.manualPlaceName)
-                        HStack {
-                            TextField("Latitude", value: $settings.manualLatitude, format: .number)
-                            TextField("Longitude", value: $settings.manualLongitude, format: .number)
-                        }
-                    } else {
-                        Text("Your coordinates are sent to Open-Meteo to look up conditions, and nowhere else.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            // Disabled rather than hidden while weather is off: the pane keeps
+            // its shape, and dimmed rows say "off" better than absence does.
+            Section {
+                Picker("Units", selection: $settings.temperatureUnit) {
+                    ForEach(TemperatureUnit.allCases, id: \.self) { unit in
+                        Text(unit.label).tag(unit)
                     }
                 }
+                Toggle("Notify when rain or snow starts", isOn: $settings.weatherAlerts)
+            }
+            .disabled(settings.weatherMode == .off)
 
-                Section {
-                    HStack {
-                        Button("Check now") {
-                            provider?.showNow()
-                            // Give the fetch a moment, then reflect it here too.
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .seconds(2))
-                                reading = provider?.latest
-                            }
-                        }
-                        Spacer()
-                        if let reading {
-                            Label(
-                                "\(reading.condition.summary), \(Int(reading.temperature.rounded()))\(settings.temperatureUnit.suffix)",
-                                systemImage: reading.condition.symbol(isDay: reading.isDay)
+            Section {
+                Picker("Source", selection: $settings.weatherLocationMode) {
+                    ForEach(WeatherLocationMode.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                if settings.weatherLocationMode == .manual {
+                    TextField("Place name", text: $settings.manualPlaceName)
+                    TextField("Latitude", value: $settings.manualLatitude, format: .number)
+                    TextField("Longitude", value: $settings.manualLongitude, format: .number)
+                }
+            } header: {
+                Text("Location")
+            } footer: {
+                SettingsFooter("Your coordinates are sent to Open-Meteo to look up conditions, and nowhere else.")
+            }
+            .disabled(settings.weatherMode == .off)
+
+            Section {
+                HStack {
+                    if let reading {
+                        HStack(spacing: 6) {
+                            // The island's own weather mark, not a generic
+                            // symbol — the readout should draw exactly what
+                            // the island would.
+                            ActivityIconView(
+                                icon: .symbol(reading.condition.symbol(isDay: reading.isDay)),
+                                size: 15,
+                                tint: Color(nsColor: .secondaryLabelColor)
                             )
-                            .foregroundStyle(.secondary)
+                            Text("\(reading.condition.summary), \(Int(reading.temperature.rounded()))\(settings.temperatureUnit.suffix)")
                         }
-                    }
-                } footer: {
-                    Text("Weather comes from Open-Meteo, which needs no account or API key.")
-                        .font(.caption)
                         .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if isChecking {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Button("Check Now") { checkNow() }
+                            .disabled(provider() == nil)
+                    }
                 }
+            } footer: {
+                SettingsFooter("Weather data comes from Open-Meteo. No account or API key required.")
             }
+            .disabled(settings.weatherMode == .off)
         }
         .formStyle(.grouped)
-        .onAppear { reading = provider?.latest }
+        .frame(width: 540, height: 500)
+        .onAppear { reading = provider()?.latest }
+    }
+
+    private func checkNow() {
+        guard let provider = provider() else { return }
+        isChecking = true
+        Task { @MainActor in
+            reading = await provider.refresh()
+            isChecking = false
+        }
     }
 }
 
 // MARK: - About
 
-private struct AboutSettings: View {
+struct AboutSettings: View {
     var cliPath: String
     @State private var copied = false
 
-    private var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    private var version: String? {
+        guard let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        else { return nil }
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        return build.map { "Version \(short) (\($0))" } ?? "Version \(short)"
+    }
+
+    /// The product's identity is a drawn object one tab away — so About is
+    /// anchored by the island itself, rendered in the user's own theme.
+    private var identitySample: Activity {
+        Activity(
+            id: "preview.about",
+            content: ActivityContent(
+                title: "Islet",
+                subtitle: "Dynamic Island for macOS",
+                icon: .symbol("sparkles"),
+                tint: .accent
+            ),
+            module: "about"
+        )
     }
 
     var body: some View {
         Form {
             Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Islet \(version)")
-                        .font(.title3.weight(.semibold))
+                VStack(spacing: 4) {
+                    IslandPreviewStage {
+                        IslandStylePreview(
+                            activity: identitySample,
+                            style: ActivityStyle.resolve(identitySample, appearance: nil)
+                        )
+                    }
+                    .padding(.bottom, 8)
+
+                    Text("Islet")
+                        .font(.title2.weight(.semibold))
+                    if let version {
+                        Text(version)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Text("A Dynamic Island for macOS, and a live-activity API for everything else on your Mac.")
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 380)
+                        .padding(.top, 6)
                     Text("MIT licensed. No account, no telemetry.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .padding(.top, 2)
                 }
-                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
             }
 
-            Section("Command line") {
-                Text("Put `islet` on your PATH:")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section {
                 HStack {
                     Text(installCommand)
                         .font(.system(size: 11, design: .monospaced))
@@ -387,15 +573,22 @@ private struct AboutSettings: View {
                         }
                     }
                 }
+            } header: {
+                Text("Command Line")
+            } footer: {
+                SettingsFooter("Puts the islet command on your PATH, for posting activities from scripts and Shortcuts.")
             }
 
             Section("API") {
-                LabeledContent("Socket", value: IsletSocket.path)
-                    .font(.system(size: 11, design: .monospaced))
-                    .textSelection(.enabled)
+                LabeledContent("Socket") {
+                    Text(IsletSocket.path)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                }
             }
         }
         .formStyle(.grouped)
+        .frame(width: 540, height: 540)
     }
 
     private var installCommand: String {

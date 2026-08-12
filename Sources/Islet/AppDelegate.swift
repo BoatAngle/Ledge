@@ -30,6 +30,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // A real main menu, even though the app is menu-bar-only. The settings
+        // window promotes the activation policy to .regular, and without this
+        // the menu bar comes up empty: ⌘W closes nothing and ⌘C/⌘V/⌘X are dead
+        // in every text field — you couldn't paste coordinates into Weather.
+        NSApp.mainMenu = buildMainMenu()
+
         // The scheduler consults per-module appearance for slot and priority
         // nudges; it takes a closure so Core never learns about settings.
         store.appearanceForModule = { [settings] identifier in
@@ -89,6 +95,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registry.stop()
         server.stop()
         windowController.hide()
+    }
+
+    // MARK: - Main menu
+
+    private func buildMainMenu() -> NSMenu {
+        let main = NSMenu()
+
+        let appItem = NSMenuItem()
+        let app = NSMenu()
+        app.addItem(
+            withTitle: "About Islet",
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""
+        )
+        app.addItem(.separator())
+        let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        prefs.target = self
+        app.addItem(prefs)
+        app.addItem(.separator())
+        app.addItem(
+            withTitle: "Quit Islet",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
+        appItem.submenu = app
+        main.addItem(appItem)
+
+        let fileItem = NSMenuItem()
+        let file = NSMenu(title: "File")
+        file.addItem(
+            withTitle: "Close",
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w"
+        )
+        fileItem.submenu = file
+        main.addItem(fileItem)
+
+        // Standard Edit items, all targeting the first responder.
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(.separator())
+        edit.addItem(
+            withTitle: "Select All",
+            action: #selector(NSText.selectAll(_:)),
+            keyEquivalent: "a"
+        )
+        editItem.submenu = edit
+        main.addItem(editItem)
+
+        return main
     }
 
     // MARK: - Menu bar
@@ -195,8 +257,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server.timers = timerProvider
         server.weather = weatherProvider
         statusItem?.menu = buildMenu()
-        settingsWindow.refresh()
+        // The settings window is NOT refreshed here: its panes observe
+        // settings.moduleRevision and re-render themselves. Rebuilding its
+        // content view used to teleport an open window to the Modules tab.
     }
+
+    /// Which pane section each module belongs to: things with a lifetime
+    /// (media, timers, meetings, downloads, weather) versus system state.
+    private static let activityModules: Set<String> = [
+        "system.media", "system.timer", "system.calendar",
+        "system.downloads", "system.weather",
+    ]
 
     private func moduleInfo() -> [ModuleInfo] {
         allProviders.map {
@@ -204,7 +275,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 id: $0.identifier,
                 name: $0.displayName,
                 isAvailable: $0.isAvailable,
-                summary: $0.summary
+                summary: $0.summary,
+                group: Self.activityModules.contains($0.identifier) ? .activities : .system
             )
         }
     }

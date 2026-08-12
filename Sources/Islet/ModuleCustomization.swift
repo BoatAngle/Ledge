@@ -99,8 +99,13 @@ enum ModulePreviewSample {
     }
 }
 
-/// Colour, size, and placement for one module, with a live island above the
+/// Color, size, and placement for one module, with a live island above the
 /// controls so every change is visible as it's made.
+///
+/// The middle is a grouped Form like every pane behind it — the sheet must
+/// read as part of the same window, not a different app. Its fixed height must
+/// stay comfortably under the Modules pane height (600), or the sheet hangs
+/// past the window's bottom edge and reads as broken.
 struct ModuleCustomizationSheet: View {
     var module: ModuleInfo
     @Bindable var settings: IsletSettings
@@ -119,20 +124,74 @@ struct ModuleCustomizationSheet: View {
             header
             Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    preview
-                    colorSection
-                    sizeSection
-                    positionSection
-                }
-                .padding(20)
+            // The preview is pinned OUTSIDE the scrolling form, the way System
+            // Settings pins the wallpaper preview: the controls may scroll, but
+            // the thing they change never leaves the screen.
+            IslandPreviewStage {
+                IslandStylePreview(activity: sample, style: style)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 4)
+
+            Form {
+                Section("Color") {
+                    swatchGrid
+                }
+
+                Section {
+                    HStack(spacing: 12) {
+                        Image(systemName: "textformat.size.smaller")
+                            .foregroundStyle(.secondary)
+                        Slider(value: scale, in: ModuleAppearance.scaleRange) { editing in
+                            if !editing { commit() }
+                        }
+                        Image(systemName: "textformat.size.larger")
+                            .foregroundStyle(.secondary)
+                        Text("\(Int(appearance.scale * 100))%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 56, alignment: .trailing)
+                    }
+                } header: {
+                    Text("Size")
+                } footer: {
+                    SettingsFooter("Scales this module's glyph and readout. The island itself keeps its size so it still lines up with the camera.")
+                }
+
+                Section {
+                    Picker("Position", selection: $appearance.slot) {
+                        ForEach(ModuleSlot.allCases, id: \.self) { slot in
+                            Text(slot.label).tag(slot)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .onChange(of: appearance.slot) { _, _ in commit() }
+
+                    HStack(spacing: 12) {
+                        Text("Priority")
+                        Slider(value: priority, in: Self.priorityRange) { editing in
+                            if !editing { commit() }
+                        }
+                        Text(priorityLabel)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 56, alignment: .trailing)
+                    }
+                } header: {
+                    Text("Position")
+                } footer: {
+                    SettingsFooter(appearance.slot.explanation)
+                }
+            }
+            .formStyle(.grouped)
 
             Divider()
             footer
         }
-        .frame(width: 460, height: 560)
+        .frame(width: 460, height: 580)
+        .onExitCommand(perform: onDone)
         .onAppear {
             appearance = settings.appearance(for: module.id)
             customColor = appearance.tint.map(Color.init) ?? .blue
@@ -151,12 +210,7 @@ struct ModuleCustomizationSheet: View {
             }
             Spacer()
             if !appearance.isDefault {
-                Text("Customised")
-                    .font(.caption2.weight(.medium))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.accentColor.opacity(0.18)))
-                    .foregroundStyle(Color.accentColor)
+                CustomizedBadge()
             }
         }
         .padding(16)
@@ -164,7 +218,7 @@ struct ModuleCustomizationSheet: View {
 
     private var footer: some View {
         HStack {
-            Button("Reset to Default") {
+            Button("Restore Defaults") {
                 appearance = .default
                 commit()
             }
@@ -176,44 +230,32 @@ struct ModuleCustomizationSheet: View {
         .padding(16)
     }
 
-    // MARK: Sections
+    // MARK: Color
 
-    private var preview: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Preview")
-            IslandPreviewStage {
-                IslandStylePreview(activity: sample, style: style)
-            }
-        }
-    }
-
-    private var colorSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Colour")
-
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
-                swatch(nil, label: "Default")
-                ForEach(IsletColor.paletteOrder, id: \.self) { name in
-                    if let color = IsletColor.named[name] {
-                        swatch(color, label: name)
-                    }
+    /// Default, the twelve palette colors, and the custom well — one grid,
+    /// two rows, no separate "custom" row hanging beneath.
+    private var swatchGrid: some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.fixed(30), spacing: 10), count: 8),
+            spacing: 10
+        ) {
+            swatch(nil, label: "Default")
+            ForEach(IsletColor.paletteOrder, id: \.self) { name in
+                if let color = IsletColor.named[name] {
+                    swatch(color, label: name)
                 }
             }
-
-            HStack {
-                ColorPicker("Custom", selection: $customColor, supportsOpacity: false)
-                    .labelsHidden()
-                Text("Custom colour")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .onChange(of: customColor) { _, newValue in
-                guard let converted = IsletColor(newValue) else { return }
-                appearance.tint = converted
-                commit()
-            }
+            ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 26, height: 26)
+                .help("Custom color")
+                .onChange(of: customColor) { _, newValue in
+                    guard let converted = IsletColor(newValue) else { return }
+                    appearance.tint = converted
+                    commit()
+                }
         }
+        .padding(.vertical, 4)
     }
 
     private func swatch(_ color: IsletColor?, label: String) -> some View {
@@ -226,7 +268,7 @@ struct ModuleCustomizationSheet: View {
                 if let color {
                     Circle().fill(Color(color))
                 } else {
-                    // "Default" reads as the module's own colour, struck through.
+                    // "Default" reads as the module's own color, struck through.
                     Circle()
                         .fill(Color(sample.content.tint ?? .accent))
                         .overlay {
@@ -246,86 +288,37 @@ struct ModuleCustomizationSheet: View {
             .help(label.capitalized)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(label.capitalized))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private var sizeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Size")
-            HStack(spacing: 12) {
-                Image(systemName: "textformat.size.smaller")
-                    .foregroundStyle(.secondary)
-                Slider(
-                    value: $appearance.scale,
-                    in: ModuleAppearance.scaleRange,
-                    step: 0.05
-                ) { editing in
-                    if !editing { commit() }
-                }
-                Image(systemName: "textformat.size.larger")
-                    .foregroundStyle(.secondary)
-                Text("\(Int(appearance.scale * 100))%")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 42, alignment: .trailing)
-            }
-            Text("Scales this module's glyph and readout. The island itself keeps its size so it still lines up with the camera.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+    // MARK: Bindings
+
+    /// Both sliders quantize in the binding rather than with `step:`, which
+    /// would draw tick combs across the rows.
+    private var scale: Binding<Double> {
+        Binding(
+            get: { appearance.scale },
+            set: { appearance.scale = ($0 / 0.05).rounded() * 0.05 }
+        )
     }
 
-    private var positionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Position")
-            Picker("Position", selection: $appearance.slot) {
-                ForEach(ModuleSlot.allCases, id: \.self) { slot in
-                    Text(slot.label).tag(slot)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .onChange(of: appearance.slot) { _, _ in commit() }
-
-            Text(appearance.slot.explanation)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 12) {
-                Text("Ordering")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Slider(
-                    value: Binding(
-                        get: { Double(appearance.priorityOffset) },
-                        set: { appearance.priorityOffset = Int($0) }
-                    ),
-                    in: Self.orderingRange,
-                    step: 25
-                ) { editing in
-                    if !editing { commit() }
-                }
-                Text(orderingLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 68, alignment: .trailing)
-            }
-        }
+    private var priority: Binding<Double> {
+        Binding(
+            get: { Double(appearance.priorityOffset) },
+            set: { appearance.priorityOffset = Int(($0 / 25).rounded()) * 25 }
+        )
     }
 
-    private static let orderingRange =
+    private static let priorityRange =
         Double(ModuleAppearance.priorityRange.lowerBound)...Double(ModuleAppearance.priorityRange.upperBound)
 
-    private var orderingLabel: String {
+    private var priorityLabel: String {
         switch appearance.priorityOffset {
         case 0: return "Normal"
         case ..<0: return "Lower"
         default: return "Higher"
         }
-    }
-
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(.subheadline.weight(.semibold))
     }
 
     private func commit() {

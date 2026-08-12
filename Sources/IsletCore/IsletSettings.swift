@@ -23,7 +23,7 @@ public enum WeatherMode: String, Codable, CaseIterable, Sendable {
     public var explanation: String {
         switch self {
         case .off:
-            return "Weather is never fetched."
+            return "Islet never checks the weather."
         case .onDemand:
             return "Shows briefly when you ask for it. The island stays empty otherwise."
         case .ambient:
@@ -63,7 +63,7 @@ public enum WeatherLocationMode: String, Codable, CaseIterable, Sendable {
     public var label: String {
         switch self {
         case .automatic: return "Use my location"
-        case .manual: return "Set manually"
+        case .manual: return "Enter coordinates"
         }
     }
 }
@@ -303,7 +303,7 @@ public enum IslandThemeID: String, Codable, CaseIterable, Sendable {
     public var explanation: String {
         switch self {
         case .system:
-            return "Monochrome glyphs, colour only where it carries meaning. Sits quietly alongside the menu bar."
+            return "Monochrome glyphs, color only where it carries meaning. Sits quietly alongside the menu bar."
         case .vivid:
             return "Saturated, filled glyphs with a soft bloom. Closest to the iPhone's Dynamic Island."
         case .glass:
