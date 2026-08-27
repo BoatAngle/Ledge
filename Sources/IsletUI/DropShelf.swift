@@ -196,14 +196,20 @@ public struct DropShelfView: View {
             VStack(spacing: 4) {
                 ForEach(shelf.files.prefix(4), id: \.self) { url in
                     fileRow(url)
+                        .transition(.blurReplace)
                 }
                 if shelf.files.count > 4 {
                     Text("+ \(shelf.files.count - 4) more")
                         .font(.system(size: 10))
                         .foregroundStyle(IslandPalette.tertiaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(.blurReplace)
                 }
             }
+            // Rows used to teleport in an otherwise fully-animated panel;
+            // the island's height rides this list through the measured-height
+            // animation on the root.
+            .animation(IslandMotion.content, value: shelf.files)
         }
         .padding(.horizontal, 18)
         .padding(.bottom, 14)

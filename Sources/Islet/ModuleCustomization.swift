@@ -111,6 +111,7 @@ struct ModuleCustomizationSheet: View {
     @Bindable var settings: IsletSettings
     var onDone: () -> Void
 
+    @Namespace private var swatchNS
     @State private var appearance: ModuleAppearance = .default
     @State private var customColor: Color = .blue
 
@@ -186,6 +187,7 @@ struct ModuleCustomizationSheet: View {
                 }
             }
             .formStyle(.grouped)
+            .modifier(SoftTopScrollEdge())
 
             Divider()
             footer
@@ -201,7 +203,10 @@ struct ModuleCustomizationSheet: View {
     // MARK: Chrome
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 10) {
+            // The chip takes the sheet's live appearance state, so it recolors
+            // as swatches are tapped — a second readout beside the island.
+            ModuleIconChip(module: module, appearance: appearance)
             VStack(alignment: .leading, spacing: 2) {
                 Text(module.name).font(.headline)
                 Text(module.summary)
@@ -211,8 +216,11 @@ struct ModuleCustomizationSheet: View {
             Spacer()
             if !appearance.isDefault {
                 CustomizedBadge()
+                    .transition(BlurReplaceTransition(configuration: .downUp)
+                        .combined(with: ScaleTransition(0.85)))
             }
         }
+        .animation(.snappy(duration: 0.25), value: appearance.isDefault)
         .padding(16)
     }
 
@@ -259,40 +267,76 @@ struct ModuleCustomizationSheet: View {
     }
 
     private func swatch(_ color: IsletColor?, label: String) -> some View {
-        let isSelected = appearance.tint == color
-        return Button {
-            appearance.tint = color
-            commit()
-        } label: {
-            ZStack {
-                if let color {
-                    Circle().fill(Color(color))
-                } else {
-                    // "Default" reads as the module's own color, struck through.
-                    Circle()
-                        .fill(Color(sample.content.tint ?? .accent))
-                        .overlay {
-                            Image(systemName: "line.diagonal")
-                                .font(.system(size: 16, weight: .light))
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-                }
+        SwatchButton(
+            fill: color.map(Color.init) ?? Color(sample.content.tint ?? .accent),
+            isDefault: color == nil,
+            isSelected: appearance.tint == color,
+            label: label,
+            ns: swatchNS
+        ) {
+            withAnimation(.snappy(duration: 0.25)) {
+                appearance.tint = color
+                commit()
             }
-            .frame(width: 26, height: 26)
-            .overlay {
-                Circle().strokeBorder(
-                    isSelected ? Color.accentColor : Color.primary.opacity(0.12),
-                    lineWidth: isSelected ? 2.5 : 0.5
-                )
-            }
-            .help(label.capitalized)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(label.capitalized))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: Bindings
+
+    /// One color circle. The selection ring travels between swatches via
+    /// matched geometry; hover swells, press dips. Deliberately no glass —
+    /// a 26pt ring is below the size where glass reads as material.
+    private struct SwatchButton: View {
+        var fill: Color
+        var isDefault: Bool
+        var isSelected: Bool
+        var label: String
+        var ns: Namespace.ID
+        var select: () -> Void
+
+        @State private var hovering = false
+
+        var body: some View {
+            Button(action: select) {
+                ZStack {
+                    Circle().fill(fill)
+                    if isDefault {
+                        // "Default" reads as the module's own color, struck through.
+                        Image(systemName: "line.diagonal")
+                            .font(.system(size: 16, weight: .light))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+                }
+                .frame(width: 26, height: 26)
+                .overlay {
+                    if isSelected {
+                        Circle()
+                            .strokeBorder(Color.accentColor, lineWidth: 2.5)
+                            .matchedGeometryEffect(id: "swatch-selection", in: ns)
+                    } else {
+                        Circle()
+                            .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                    }
+                }
+                .scaleEffect(hovering ? 1.12 : 1)
+                .help(label.capitalized)
+            }
+            .buttonStyle(SwatchPressStyle())
+            .onHover { isIn in
+                withAnimation(.snappy(duration: 0.15)) { hovering = isIn }
+            }
+            .accessibilityLabel(Text(label.capitalized))
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        }
+    }
+
+    private struct SwatchPressStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.9 : 1)
+                .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
+        }
+    }
 
     /// Both sliders quantize in the binding rather than with `step:`, which
     /// would draw tick combs across the rows.

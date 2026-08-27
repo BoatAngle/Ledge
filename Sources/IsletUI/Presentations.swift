@@ -59,7 +59,8 @@ public struct CompactLeadingView: View {
                 .glyphGlow(style.tint, radius: glyph * 0.34, intensity: style.glow(theme))
             }
         }
-        .transition(.scale(scale: 0.62).combined(with: .opacity))
+        // Handoffs read as one object re-forming, not a pop-in at glyph size.
+        .transition(.blurReplace)
     }
 }
 
@@ -100,6 +101,9 @@ public struct CompactTrailingView: View {
                     .monospacedDigit()
                     .foregroundStyle(style.accentColor)
                     .contentTransition(.numericText())
+                    // Keyed to the text itself: the strip's animation keys on
+                    // activity id, so 84% → 85% would otherwise snap.
+                    .animation(IslandMotion.content, value: text)
                     .glyphGlow(style.tint, radius: 6, intensity: style.glow(theme) * 0.7)
             } else if let icon = content.trailingIcon {
                 ActivityIconView(
@@ -118,7 +122,7 @@ public struct CompactTrailingView: View {
                 BreathingDot(tint: style.accentColor, size: 7 * style.scale)
             }
         }
-        .transition(.scale(scale: 0.62).combined(with: .opacity))
+        .transition(.blurReplace)
     }
 }
 
@@ -162,6 +166,7 @@ public struct MinimalView: View {
 /// The drop-down panel.
 public struct ExpandedView: View {
     @Environment(\.islandTheme) private var theme
+    @Namespace private var actionsNamespace
     public var activity: Activity
     public var siblings: [Activity]
     public var style: ActivityStyle
@@ -266,6 +271,7 @@ public struct ExpandedView: View {
                     .monospacedDigit()
                     .foregroundStyle(style.accentColor)
                     .contentTransition(.numericText())
+                    .animation(IslandMotion.content, value: trailing)
             }
         }
     }
@@ -393,7 +399,21 @@ public struct ExpandedView: View {
         }
     }
 
+    @ViewBuilder
     private func actions(_ actions: [ActivityAction]) -> some View {
+        // On glass, the buttons share a container so a swap (Pause → Resume)
+        // flows between shapes instead of cross-fading — the platform's echo,
+        // at control scale, of the island's own metaball idea.
+        if theme.actionStyle == .glass, #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 8) {
+                actionRow(actions, morphing: true)
+            }
+        } else {
+            actionRow(actions, morphing: false)
+        }
+    }
+
+    private func actionRow(_ actions: [ActivityAction], morphing: Bool) -> some View {
         HStack(spacing: IslandDesign.space(2)) {
             ForEach(actions) { action in
                 Button {
@@ -414,6 +434,7 @@ public struct ExpandedView: View {
                         kind: theme.actionStyle
                     )
                 )
+                .modifier(ActionMorphID(id: action.id, namespace: actionsNamespace, enabled: morphing))
             }
             Spacer(minLength: 0)
         }
@@ -437,6 +458,21 @@ public struct ExpandedView: View {
             Spacer(minLength: 0)
         }
         .animation(IslandMotion.content, value: activity.id)
+    }
+}
+
+/// Tags an action button into the actions' glass container, where available.
+private struct ActionMorphID: ViewModifier {
+    var id: String
+    var namespace: Namespace.ID
+    var enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled, #available(macOS 26.0, *) {
+            content.glassEffectID(id, in: namespace)
+        } else {
+            content
+        }
     }
 }
 

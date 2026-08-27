@@ -40,7 +40,10 @@ public struct IslandStylePreview: View {
                 bodySize: bodySize,
                 topFillet: fillet,
                 bottomRadius: IslandGeometry.bottomRadius(for: .compact, metrics: metrics),
-                hasDepth: true
+                hasDepth: true,
+                // Deterministic material, not a live window onto the settings
+                // form behind the card.
+                prefersLiveGlass: false
             )
             .islandShadow(.resting)
 
@@ -86,17 +89,38 @@ public struct IslandPreviewStage<Content: View>: View {
             .frame(maxWidth: .infinity)
             .background {
                 // A muted gradient rather than a photo: the point is to show the
-                // island's edge against something, not to be decorative.
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.16, green: 0.17, blue: 0.21),
-                        Color(red: 0.09, green: 0.10, blue: 0.13),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                // island's edge against something, not to be decorative. The two
+                // off-axis glows give the stage luminance variation — a flat
+                // ground leaves the Glass theme's material with nothing worth
+                // sampling, which is how its card ends up reading as dead scrim.
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.16, green: 0.17, blue: 0.21),
+                            Color(red: 0.09, green: 0.10, blue: 0.13),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    RadialGradient(
+                        colors: [Color(red: 0.35, green: 0.38, blue: 0.50).opacity(0.35), .clear],
+                        center: UnitPoint(x: 0.72, y: -0.1),
+                        startRadius: 10,
+                        endRadius: 260
+                    )
+                    RadialGradient(
+                        colors: [Color(red: 0.45, green: 0.35, blue: 0.30).opacity(0.12), .clear],
+                        center: UnitPoint(x: 0.15, y: 1.1),
+                        startRadius: 10,
+                        endRadius: 220
+                    )
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(alignment: .top) {
+                // The screen edge the island hangs from.
+                Color.white.opacity(0.10).frame(height: 0.5)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)

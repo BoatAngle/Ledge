@@ -21,7 +21,7 @@ public struct IslandRootView: View {
     @State private var goo = GooDriver()
     @State private var isHovering = false
     @State private var hoverTask: Task<Void, Never>?
-    @State private var arrivalPulse: CGFloat = 1
+    @State private var hoverSwell: CGFloat = 1
     @State private var measuredPanelHeight: CGFloat = IslandGeometry.expandedMinHeight
 
     public init(
@@ -148,22 +148,37 @@ public struct IslandRootView: View {
                     style: style(for: secondary)
                 )
                     .offset(x: fillet + leadingReserve + minimalFrame.minX, y: minimalFrame.minY)
-                    .transition(.scale(scale: 0.3).combined(with: .opacity))
+                    // Scale stays — the circle births out of the metaball
+                    // merge — but the fade softens into a blur.
+                    .transition(ScaleTransition(0.3).combined(with: BlurReplaceTransition(configuration: .downUp)))
             }
         }
         .frame(width: footprint.width, height: footprint.height, alignment: .topLeading)
-        .scaleEffect(arrivalPulse, anchor: .top)
+        // Retrigger-safe by construction: a second arrival inside the first
+        // pulse restarts the keyframes instead of fighting a sleeping Task.
+        .keyframeAnimator(initialValue: 1.0, trigger: store.lastArrivalID) { view, scale in
+            view.scaleEffect(scale, anchor: .top)
+        } keyframes: { _ in
+            // A flat 1.0 → 1.0 track when arrivals are muted: same shape,
+            // no visible motion, no builder branching.
+            let peak = settings.animateArrivals ? 1.045 : 1.0
+            KeyframeTrack(\.self) {
+                SpringKeyframe(peak, duration: 0.14, spring: Spring(response: 0.28, dampingRatio: 0.85))
+                SpringKeyframe(1.0, duration: 0.50, spring: Spring(response: 0.40, dampingRatio: 0.60))
+            }
+        }
+        .scaleEffect(hoverSwell, anchor: .top)
         .contentShape(Rectangle())
         .onHover { hovering in handleHover(hovering) }
         .onTapGesture { handleTap() }
         .animation(IslandMotion.shape, value: composition.structureKey)
-        .animation(IslandMotion.expand, value: mode)
+        // Open carries overshoot (an invitation); close settles dead (an
+        // acknowledgment). The asymmetry is deliberate, not a mirrored reverse.
+        .animation(mode == .expanded ? IslandMotion.expand : IslandMotion.collapse, value: mode)
+        .animation(IslandMotion.content, value: composition.expandedActivity?.id)
+        .animation(IslandMotion.shape, value: measuredPanelHeight)
         .onChange(of: composition.structureKey) { _, _ in
             goo.pulse()
-        }
-        .onChange(of: store.lastArrivalID) { _, newValue in
-            guard newValue != nil else { return }
-            bounce()
         }
         .onChange(of: footprint) { _, new in
             onFootprintChange(new)
@@ -191,7 +206,7 @@ public struct IslandRootView: View {
                 if let activity = composition.expandedActivity,
                    activity.nativeView == .dropZone, let shelf, !shelf.files.isEmpty {
                     DropShelfView(shelf: shelf)
-                        .transition(.opacity.combined(with: .offset(y: -8)))
+                        .transition(Self.panelTransition)
                 } else if let activity = composition.expandedActivity {
                     ExpandedView(
                         activity: activity,
@@ -201,11 +216,27 @@ public struct IslandRootView: View {
                         onAction: { perform($0) },
                         onDismiss: { collapse() }
                     )
-                    .transition(.opacity.combined(with: .offset(y: -8)))
+                    // Identity keyed to the activity, so paging between
+                    // siblings is a real swap rather than an in-place teleport.
+                    .id(activity.id)
+                    .transition(Self.panelTransition)
                 }
                 Spacer(minLength: 0)
             }
         }
+    }
+
+    /// Shape leads, content follows: panel content blurs in one beat behind
+    /// the island's growth, and on close it clears quickly so the shrinking
+    /// shape never crops live text.
+    private static var panelTransition: some Transition {
+        AsymmetricTransition(
+            insertion: BlurReplaceTransition(configuration: .downUp)
+                .combined(with: OffsetTransition(CGSize(width: 0, height: -10)))
+                .animation(IslandMotion.content.delay(0.08)),
+            removal: BlurReplaceTransition(configuration: .downUp)
+                .animation(.smooth(duration: 0.18))
+        )
     }
 
     /// Leading glyph, a gap the width of the camera housing, trailing glyph.
@@ -250,6 +281,7 @@ public struct IslandRootView: View {
         hoverTask?.cancel()
 
         guard hovering else {
+            withAnimation(.smooth(duration: 0.25)) { hoverSwell = 1 }
             // Leaving closes, after a beat, so a cursor clipping the corner on
             // its way somewhere else doesn't slam the panel shut.
             hoverTask = Task { @MainActor in
@@ -262,6 +294,12 @@ public struct IslandRootView: View {
 
         guard settings.expandOnHover else { return }
         guard !composition.isIdle, composition.primary?.isExpandable == true else { return }
+        // Acknowledge intent before acting on it: a 2% swell says "I noticed"
+        // during the dwell. Gated to delays long enough that it can't read as
+        // jitter when expansion is effectively instant.
+        if !store.isExpanded, settings.hoverDelay >= 150 {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.75)) { hoverSwell = 1.02 }
+        }
         hoverTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(Int(settings.hoverDelay)))
             guard !Task.isCancelled, isHovering else { return }
@@ -290,12 +328,16 @@ public struct IslandRootView: View {
 
     private func expand() {
         guard !store.isExpanded else { return }
-        withAnimation(IslandMotion.expand) { store.isExpanded = true }
+        withAnimation(IslandMotion.expand) {
+            store.isExpanded = true
+            // The swell folds into the panel's growth instead of popping back.
+            hoverSwell = 1
+        }
     }
 
     private func collapse() {
         guard store.isExpanded else { return }
-        withAnimation(IslandMotion.expand) {
+        withAnimation(IslandMotion.collapse) {
             store.isExpanded = false
             store.focusedActivityID = nil
         }
@@ -315,13 +357,5 @@ public struct IslandRootView: View {
         NSWorkspace.shared.open(url)
     }
 
-    private func bounce() {
-        guard settings.animateArrivals else { return }
-        withAnimation(IslandMotion.arrival) { arrivalPulse = 1.045 }
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(140))
-            withAnimation(IslandMotion.arrival) { arrivalPulse = 1 }
-        }
-    }
 }
 

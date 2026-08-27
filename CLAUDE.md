@@ -161,6 +161,55 @@ The silhouette masks a gradient rather than filling one directly:
 shape that then masks the surface. That's what lets the island have depth *and*
 merge like liquid.
 
+## Liquid Glass and motion
+
+The Glass theme's surface is real Liquid Glass on macOS 26+, behind
+`if #available` with the material+scrim branch kept verbatim as the fallback
+(deployment target stays macOS 14). Decisions that took live experiments:
+
+- **`.clear`, never `.regular`.** Regular glass has an adaptive legibility
+  lift that fights a dark tint — over a white desktop it plateaus at mid-grey
+  no matter how much black you pour in. `.clear` is the media-context glass:
+  transparent, no lift, so the tint (black 0.5) and scrim actually set the
+  luminance. `effectiveGlassScrim` (0.26 on 26+) is only the legibility floor;
+  the old 0.46 token stays for older systems.
+- **One glass sheet, masked.** The glass shape is a plain `.rect`; the
+  silhouette mask carves NotchShape, goo, and the detached circle out of it.
+  The mask stays the sole shape authority — no per-circle glass, no
+  glassEffectID for the merge; the metaball IS the identity. Cost: the glass's
+  own edge lensing is clipped away, so the drawn rim and specular line remain
+  load-bearing.
+- **Glass is what you touch.** Only the action buttons get
+  `.glassEffect(...interactive())` (in a `GlassEffectContainer` so a Pause →
+  Resume swap morphs); chips, detail panes, and page dots stay ink. In
+  settings, NO control is glass — the theme-card selection lozenge was tried
+  as glass and *blurred the card's own preview into soup* in Dark Mode; it's a
+  matched-geometry tinted fill on every OS.
+- **`.glassEffect` works on the island's window.** Verified live: a
+  borderless, transparent, non-activating panel at CGShieldingWindowLevel
+  samples and refracts the desktop behind it.
+
+Motion rules that came out of the same pass:
+
+- Open and close are different springs (`expand` 0.50/0.76 with overshoot,
+  `collapse` 0.38/0.92 nearly dead). The goo pulse is asymmetric — fast rise
+  (0.16 easeOut), slow settle (0.39 easeInOut) — and the rim *fades* at the
+  goo threshold instead of blinking.
+- `contentTransition(.numericText())` does nothing without an animated
+  transaction: TimelineView ticks carry none, so every rolling number needs
+  `.animation(_, value: label)` next to it. This bug existed on every readout.
+- The arrival bounce is a `keyframeAnimator` (trigger: lastArrivalID) —
+  retrigger-safe where the old two-`withAnimation` Task clipped when two
+  arrivals landed inside 140ms.
+- `AnyTransition` has no `.blurReplace`; compose the `Transition`-protocol
+  types (`BlurReplaceTransition(configuration: .downUp)`, `ScaleTransition`,
+  `OffsetTransition`, `AsymmetricTransition`) — all available at macOS 14.
+
+One test-harness trap: while a human is using the machine, every real click
+fires the outside-click monitor and closes the panel — scripted
+expand-then-screenshot sequences fail *intermittently* and it looks exactly
+like a rendering bug. It isn't. Check for user activity before bisecting.
+
 ## Per-module appearance
 
 `ModuleAppearance` (tint, scale, slot, priority offset) is stored per module as

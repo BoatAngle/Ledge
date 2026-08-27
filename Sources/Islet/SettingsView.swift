@@ -55,6 +55,18 @@ enum SettingsTab: String, CaseIterable {
     }
 }
 
+/// Soft scroll-edge treatment where the system has it. The panes get this
+/// through ThemedPane; the customization sheet applies it to its own Form.
+struct SoftTopScrollEdge: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            content
+        }
+    }
+}
+
 /// Grouped-form section footers align trailing by default on macOS; every
 /// footer in this window wants the conventional leading block instead.
 struct SettingsFooter: View {
@@ -85,6 +97,7 @@ struct CustomizedBadge: View {
 
 struct GeneralSettings: View {
     @Bindable var settings: IsletSettings
+    @Namespace private var themeNS
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
     @State private var confirmingReset = false
@@ -99,24 +112,8 @@ struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10),
-                    ],
-                    spacing: 10
-                ) {
-                    ForEach(IslandThemeID.allCases, id: \.self) { id in
-                        ThemeCard(
-                            id: id,
-                            isSelected: settings.theme == id,
-                            sample: themeSample
-                        ) {
-                            settings.theme = id
-                        }
-                    }
-                }
-                .padding(.vertical, 2)
+                themeGrid
+                    .padding(.vertical, 2)
             } header: {
                 Text("Theme")
             } footer: {
@@ -184,6 +181,31 @@ struct GeneralSettings: View {
         .frame(width: 540, height: 700)
     }
 
+    /// The four cards. Selection is a tinted fill that physically slides
+    /// between cells via matched geometry.
+    private var themeGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10),
+            ],
+            spacing: 10
+        ) {
+            ForEach(IslandThemeID.allCases, id: \.self) { id in
+                ThemeCard(
+                    id: id,
+                    isSelected: settings.theme == id,
+                    sample: themeSample,
+                    ns: themeNS
+                ) {
+                    withAnimation(.smooth(duration: 0.32)) {
+                        settings.theme = id
+                    }
+                }
+            }
+        }
+    }
+
     /// Quantized in the binding rather than with `step:` — a stepped slider
     /// draws a 41-tick comb across the row, which Apple's timing sliders
     /// (Key Repeat, Double-Click Speed) never do.
@@ -213,11 +235,18 @@ struct GeneralSettings: View {
 
 /// One selectable theme, shown as the thing it produces: a miniature island
 /// rendered in that theme, on a strip of screen.
+///
+/// Selection is a highlight that physically travels between cards — a glass
+/// lozenge morphing through the shared container on macOS 26, a matched-
+/// geometry slide on older systems.
 private struct ThemeCard: View {
     var id: IslandThemeID
     var isSelected: Bool
     var sample: Activity
+    var ns: Namespace.ID
     var select: () -> Void
+
+    @State private var isHovering = false
 
     private var style: ActivityStyle {
         ActivityStyle.resolve(sample, appearance: nil)
@@ -241,18 +270,50 @@ private struct ThemeCard: View {
                     .foregroundStyle(isSelected ? Color.accentColor : .primary)
             }
             .padding(7)
+            .background { selectionBackground }
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(
-                        isSelected ? Color.accentColor : Color.primary.opacity(0.12),
+                        isSelected ? Color.accentColor : Color.primary.opacity(isHovering ? 0.25 : 0.12),
                         lineWidth: isSelected ? 2 : 0.5
                     )
             }
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .scaleEffect(isHovering && !isSelected ? 1.015 : 1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ThemeCardPressStyle())
+        .onHover { hovering in
+            withAnimation(.snappy(duration: 0.18)) { isHovering = hovering }
+        }
         .accessibilityLabel(Text(id.label))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // No glass here, on evidence rather than taste: an in-window glassEffect
+    // lozenge behind the card blurred the card's own preview into soup in
+    // Dark Mode. A traveling tinted fill communicates the same selection
+    // without eating the thing being selected.
+    @ViewBuilder
+    private var selectionBackground: some View {
+        if isSelected {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.10))
+                .matchedGeometryEffect(id: "theme-selection", in: ns)
+        }
+    }
+}
+
+/// Press feedback for the theme cards: quick in, springy out.
+private struct ThemeCardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(
+                configuration.isPressed
+                    ? .snappy(duration: 0.12, extraBounce: 0)
+                    : .spring(response: 0.32, dampingFraction: 0.6),
+                value: configuration.isPressed
+            )
     }
 }
 
@@ -319,15 +380,23 @@ struct ModuleSettings: View {
         let isEnabled = settings.isModuleEnabled(module.id)
 
         return HStack(spacing: 10) {
+            // The chip dims and desaturates with the switch, so cause and
+            // effect read as one gesture.
             ModuleIconChip(module: module, appearance: appearance)
+                .opacity(isEnabled || !module.isAvailable ? 1 : 0.4)
+                .saturation(isEnabled || !module.isAvailable ? 1 : 0)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(module.name)
+                        .foregroundStyle(isEnabled || !module.isAvailable ? .primary : .secondary)
                     if !appearance.isDefault {
                         CustomizedBadge()
+                            .transition(BlurReplaceTransition(configuration: .downUp)
+                                .combined(with: ScaleTransition(0.85)))
                     }
                 }
+                .animation(.snappy(duration: 0.25), value: appearance.isDefault)
                 Text(module.isAvailable ? module.summary : "Not available on this Mac")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -335,19 +404,17 @@ struct ModuleSettings: View {
 
             Spacer()
 
-            Button {
+            InfoButton(disabled: !module.isAvailable || !isEnabled) {
                 editing = module
-            } label: {
-                Image(systemName: "info.circle")
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
-            .help("Color, size, and position")
-            .disabled(!module.isAvailable || !isEnabled)
 
             Toggle(module.name, isOn: Binding(
                 get: { settings.isModuleEnabled(module.id) },
-                set: { onToggle(module.id, $0) }
+                set: { newValue in
+                    withAnimation(.smooth(duration: 0.25)) {
+                        onToggle(module.id, newValue)
+                    }
+                }
             ))
             .toggleStyle(.switch)
             .labelsHidden()
@@ -358,10 +425,33 @@ struct ModuleSettings: View {
     }
 }
 
+/// The "this row has more settings" affordance, filling on hover the way
+/// System Settings' own info buttons acknowledge the pointer.
+private struct InfoButton: View {
+    var disabled: Bool
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: hovering && !disabled ? "info.circle.fill" : "info.circle")
+                .contentTransition(.symbolEffect(.replace))
+                .foregroundStyle(hovering && !disabled ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.borderless)
+        .help("Color, size, and position")
+        .disabled(disabled)
+        .onHover { isIn in
+            withAnimation(.snappy(duration: 0.15)) { hovering = isIn }
+        }
+    }
+}
+
 /// The module's own mark, drawn white on its effective tint — the System
 /// Settings row grammar, spoken in Islet's glyph family. The chip doubles as
-/// the color swatch: a tint override is visible at a glance.
-private struct ModuleIconChip: View {
+/// the color swatch: a tint override is visible at a glance. Internal, not
+/// private: the customization sheet reuses it as a live header readout.
+struct ModuleIconChip: View {
     @Environment(\.islandTheme) private var theme
     var module: ModuleInfo
     var appearance: ModuleAppearance
@@ -460,18 +550,24 @@ struct WeatherSettings: View {
                                 tint: Color(nsColor: .secondaryLabelColor)
                             )
                             Text("\(reading.condition.summary), \(Int(reading.temperature.rounded()))\(settings.temperatureUnit.suffix)")
+                                .contentTransition(.numericText())
                         }
                         .foregroundStyle(.secondary)
+                        .transition(BlurReplaceTransition(configuration: .downUp))
                     }
                     Spacer()
                     if isChecking {
                         ProgressView()
                             .controlSize(.small)
+                            .transition(BlurReplaceTransition(configuration: .downUp))
                     } else {
                         Button("Check Now") { checkNow() }
                             .disabled(provider() == nil)
+                            .transition(BlurReplaceTransition(configuration: .downUp))
                     }
                 }
+                .animation(.smooth(duration: 0.22), value: isChecking)
+                .animation(.smooth(duration: 0.22), value: reading)
             } footer: {
                 SettingsFooter("Weather data comes from Open-Meteo. No account or API key required.")
             }
@@ -563,7 +659,7 @@ struct AboutSettings: View {
                         .lineLimit(2)
                         .truncationMode(.middle)
                     Spacer()
-                    Button(copied ? "Copied" : "Copy") {
+                    Button {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(installCommand, forType: .string)
                         copied = true
@@ -571,6 +667,20 @@ struct AboutSettings: View {
                             try? await Task.sleep(for: .seconds(2))
                             copied = false
                         }
+                    } label: {
+                        // The fixed width stops the button jumping between
+                        // the two labels; each swaps through a blur.
+                        ZStack {
+                            if copied {
+                                Text("Copied")
+                                    .transition(BlurReplaceTransition(configuration: .downUp))
+                            } else {
+                                Text("Copy")
+                                    .transition(BlurReplaceTransition(configuration: .downUp))
+                            }
+                        }
+                        .frame(minWidth: 52)
+                        .animation(.smooth(duration: 0.2), value: copied)
                     }
                 }
             } header: {

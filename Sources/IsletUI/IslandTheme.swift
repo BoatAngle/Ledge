@@ -59,6 +59,23 @@ public struct IslandTheme: Equatable, Sendable {
     /// "designed" right up until you can't read it. The scrim buys back a
     /// guaranteed floor while keeping the blur.
     public var glassScrim: Double
+
+    /// The scrim as actually applied.
+    ///
+    /// On real Liquid Glass the darkening goes INTO the material via tint —
+    /// laying the full 0.46 flat scrim over live glass would bury the specular
+    /// and lensing response you switched to glass for. The residual 0.18 wash
+    /// is only a legibility floor over pathological bright desktops. Older
+    /// systems keep the stored token untouched.
+    public var effectiveGlassScrim: Double {
+        if #available(macOS 26.0, *) {
+            // 0.18 failed the white-desktop contrast ladder (panel went
+            // mid-grey, Ink.secondary mush, visible seam at the camera strip);
+            // 0.26 is the next rung, paired with tint 0.55 in the surface.
+            return usesGlass ? 0.26 : glassScrim
+        }
+        return glassScrim
+    }
     public var bottomRadiusScale: CGFloat
 
     // Glyphs

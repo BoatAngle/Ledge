@@ -88,6 +88,10 @@ public struct IslandSilhouette: View {
     /// desktop where solid hardware is. Glass therefore starts *below* the
     /// camera strip rather than at the bezel.
     public var opaqueTopHeight: CGFloat
+    /// False forces the material+scrim branch even on macOS 26 — the settings
+    /// previews want a deterministic surface, not a live window onto the form
+    /// behind them.
+    public var prefersLiveGlass: Bool
 
     /// Slack around the canvas so the blur has somewhere to bleed.
     private let pad: CGFloat = 30
@@ -99,7 +103,8 @@ public struct IslandSilhouette: View {
         bottomRadius: CGFloat,
         goo: CGFloat = 0,
         hasDepth: Bool = true,
-        opaqueTopHeight: CGFloat = 0
+        opaqueTopHeight: CGFloat = 0,
+        prefersLiveGlass: Bool = true
     ) {
         self.bodySize = bodySize
         self.minimalFrame = minimalFrame
@@ -108,6 +113,7 @@ public struct IslandSilhouette: View {
         self.goo = goo
         self.hasDepth = hasDepth
         self.opaqueTopHeight = opaqueTopHeight
+        self.prefersLiveGlass = prefersLiveGlass
     }
 
     /// Total footprint including the fillet flare and, in `.split`, the
@@ -131,8 +137,13 @@ public struct IslandSilhouette: View {
             surface
                 .mask(alignment: .topLeading) { silhouetteMask }
 
-            if hasDepth, goo <= 0.2 {
-                rim
+            if hasDepth {
+                // Faded rather than removed mid-morph: a stroke tracing a
+                // stretching blob reads as an outline, but blinking at the
+                // goo threshold reads as a glitch.
+                Group { rim }
+                    .opacity(goo <= 0.2 ? 1 : 0)
+                    .animation(.easeOut(duration: 0.15), value: goo <= 0.2)
             }
         }
         .frame(width: footprint.width, height: footprint.height, alignment: .topLeading)
@@ -143,11 +154,32 @@ public struct IslandSilhouette: View {
     private var surface: some View {
         if theme.usesGlass, hasDepth {
             ZStack {
-                Rectangle().fill(.ultraThinMaterial)
+                // Real Liquid Glass where the system has it. The shape is
+                // deliberately a plain rect: the silhouette mask downstream is
+                // the sole shape authority, carving NotchShape, metaball goo,
+                // and the detached circle out of ONE glass sheet — so glass
+                // follows every morph with zero new geometry. Accepted cost:
+                // the glass's own edge lensing is clipped away by the mask, so
+                // the drawn rim and specular line stay load-bearing.
+                if prefersLiveGlass, #available(macOS 26.0, *) {
+                    // .clear, not .regular: regular glass's adaptive
+                    // legibility lift fights a dark tint — over a white
+                    // desktop it plateaued at mid-grey no matter the tint.
+                    // Clear is the media-context glass: transparent, no lift,
+                    // so the tint and scrim actually decide the luminance.
+                    Color.clear.glassEffect(
+                        .clear.tint(Color.black.opacity(0.5)),
+                        in: .rect
+                    )
+                } else {
+                    Rectangle().fill(.ultraThinMaterial)
+                }
                 // Guarantees a contrast floor no matter what the material is
                 // sampling. Without it the panel is unreadable over a bright
                 // desktop, which is the fastest way to lose a design argument.
-                Rectangle().fill(Color.black.opacity(theme.glassScrim))
+                Rectangle().fill(Color.black.opacity(
+                    prefersLiveGlass ? theme.effectiveGlassScrim : theme.glassScrim
+                ))
             }
             // The island is always dark; without pinning this, the material
             // picks the light variant in Light Mode and turns milky.

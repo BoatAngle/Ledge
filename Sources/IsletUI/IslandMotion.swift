@@ -11,16 +11,17 @@ public enum IslandMotion {
     /// Content swaps inside a stable shape — a shade quicker so text doesn't
     /// lag the container it lives in.
     public static let content = Animation.spring(response: 0.30, dampingFraction: 0.86)
-    /// Opening and closing the panel. Slightly looser, with a little overshoot.
-    public static let expand = Animation.spring(response: 0.48, dampingFraction: 0.80)
-    /// The nudge a newly arrived activity gives the island.
-    public static let arrival = Animation.spring(response: 0.34, dampingFraction: 0.58)
-
+    /// Opening the panel. Looser, with a little overshoot — an invitation.
+    public static let expand = Animation.spring(response: 0.50, dampingFraction: 0.76)
+    /// Closing it. Tighter and nearly critically damped: putting something
+    /// away shouldn't bounce. Asymmetry between open and close is most of what
+    /// separates "fluid" from "springy".
+    public static let collapse = Animation.spring(response: 0.38, dampingFraction: 0.92)
     /// Peak blur radius during a split or merge.
     public static let gooPeak: CGFloat = 16
-    /// How long the goo pulse lasts. Long enough to read as liquid, short
-    /// enough that the shapes are crisp by the time the eye settles.
-    public static let gooDuration: TimeInterval = 0.42
+    /// The pulse is asymmetric: liquid snaps together fast and settles slowly.
+    public static let gooRise: TimeInterval = 0.16
+    public static let gooFall: TimeInterval = 0.39
 }
 
 /// Drives the metaball blur through a rise-and-fall pulse whenever the island's
@@ -38,11 +39,10 @@ public final class GooDriver {
         task?.cancel()
         task = Task { @MainActor [weak self] in
             guard let self else { return }
-            let half = IslandMotion.gooDuration / 2
-            withAnimation(.easeOut(duration: half)) { self.radius = peak }
-            try? await Task.sleep(for: .seconds(half))
+            withAnimation(.easeOut(duration: IslandMotion.gooRise)) { self.radius = peak }
+            try? await Task.sleep(for: .seconds(IslandMotion.gooRise))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeIn(duration: half)) { self.radius = 0 }
+            withAnimation(.easeInOut(duration: IslandMotion.gooFall)) { self.radius = 0 }
         }
     }
 

@@ -72,6 +72,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private func build() {
         let tabs = SettingsTabViewController()
         tabs.tabStyle = .toolbar
+        // Pane content crossfades while the window height animates to the new
+        // pane's size; .allowUserInteraction stops the window going dead
+        // mid-transition.
+        tabs.transitionOptions = [.crossfade, .allowUserInteraction]
         for tab in SettingsTab.allCases {
             let host = NSHostingController(rootView: pane(for: tab))
             host.sizingOptions = [.preferredContentSize]
@@ -154,6 +158,11 @@ struct ThemedPane<Content: View>: View {
     var body: some View {
         // Read inside body so @Observable registers the dependency and the
         // pane re-renders when the theme changes.
-        content.islandTheme(.preset(settings.theme))
+        let themed = content.islandTheme(.preset(settings.theme))
+        if #available(macOS 26.0, *) {
+            themed.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            themed
+        }
     }
 }

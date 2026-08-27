@@ -252,7 +252,14 @@ public struct IslandButtonStyle: ButtonStyle {
             .overlay { border }
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .opacity(configuration.isPressed ? 0.75 : 1)
-            .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
+            // Press-in is near-instant (input acknowledgment); release
+            // carries the spring personality.
+            .animation(
+                configuration.isPressed
+                    ? .snappy(duration: 0.12, extraBounce: 0)
+                    : .spring(response: 0.32, dampingFraction: 0.55),
+                value: configuration.isPressed
+            )
     }
 
     @ViewBuilder
@@ -262,7 +269,17 @@ public struct IslandButtonStyle: ButtonStyle {
             Capsule(style: .continuous)
                 .fill(isDestructive ? Color.red.opacity(0.18) : IslandDesign.Ink.controlFill)
         case .glass:
-            Capsule(style: .continuous).fill(Color.white.opacity(0.14))
+            // Real Liquid Glass where the system has it — glass is what you
+            // touch; ink is what you read. `.interactive()` brings the
+            // hover/press shimmer.
+            if #available(macOS 26.0, *) {
+                Color.clear.glassEffect(
+                    .regular.tint(isDestructive ? Color.red.opacity(0.35) : .clear).interactive(),
+                    in: .capsule
+                )
+            } else {
+                Capsule(style: .continuous).fill(Color.white.opacity(0.14))
+            }
         case .bordered, .plain:
             Color.clear
         }
@@ -278,8 +295,13 @@ public struct IslandButtonStyle: ButtonStyle {
                     lineWidth: 0.75
                 )
         case .glass:
-            Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.75)
+            // Real glass supplies its own edge; a manual stroke would double it.
+            if #available(macOS 26.0, *) {
+                Color.clear
+            } else {
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.75)
+            }
         case .plain:
             Color.clear
         }

@@ -282,7 +282,7 @@ public final class IslandWindowController {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.store.isExpanded else { return }
-                withAnimation(IslandMotion.expand) {
+                withAnimation(IslandMotion.collapse) {
                     self.store.isExpanded = false
                     self.store.focusedActivityID = nil
                 }

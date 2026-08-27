@@ -27,11 +27,16 @@ public struct LiveTimeText: View {
 
     public var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            Text(text(at: context.date))
+            let label = text(at: context.date)
+            // The .animation(value:) is load-bearing: contentTransition only
+            // fires inside an animated transaction, and a TimelineView tick
+            // carries none — without it every digit hard-swaps.
+            Text(label)
                 .font(font)
                 .monospacedDigit()
                 .foregroundStyle(color)
-                .contentTransition(.numericText())
+                .contentTransition(.numericText(countsDown: target != nil))
+                .animation(IslandMotion.content, value: label)
         }
     }
 
@@ -79,7 +84,7 @@ public struct WaveformView: View {
     }
 
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: !isAnimating)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isAnimating)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             HStack(alignment: .center, spacing: 2) {
                 ForEach(0..<barCount, id: \.self) { index in
