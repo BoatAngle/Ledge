@@ -311,6 +311,11 @@ public final class MediaProvider: SystemProvider {
 enum LiveTimeFormat {
     static func short(_ seconds: Double) -> String {
         let total = Int(seconds.rounded())
+        // Same rollover as LiveTimeText.format — a 92-minute podcast is
+        // 1:32:00, not 92:00.
+        if total >= 3600 {
+            return String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
+        }
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 }

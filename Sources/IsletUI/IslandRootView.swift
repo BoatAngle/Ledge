@@ -131,8 +131,10 @@ public struct IslandRootView: View {
                 bodySize: bodySize,
                 minimalFrame: minimalFrame,
                 topFillet: fillet,
+                // The theme's radius scale is a panel refinement; the closed
+                // pill keeps stock geometry so it reads as hardware.
                 bottomRadius: IslandGeometry.bottomRadius(for: mode, metrics: metrics)
-                    * theme.bottomRadiusScale,
+                    * (mode == .expanded ? theme.bottomRadiusScale : 1),
                 goo: goo.radius,
                 hasDepth: mode != .idle,
                 opaqueTopHeight: metrics.notchSize.height,
@@ -225,7 +227,10 @@ public struct IslandRootView: View {
                 } else if let activity = composition.expandedActivity {
                     ExpandedView(
                         activity: activity,
-                        siblings: composition.all,
+                        // Ongoing only: a transient's dot would pop in, shove
+                        // the row, and expire under the click — the dots
+                        // extend the content-pinning invariant.
+                        siblings: composition.all.filter { $0.kind == .ongoing },
                         style: style(for: activity),
                         onSelect: { store.focusedActivityID = $0 },
                         onAction: { perform($0) },
@@ -283,7 +288,11 @@ public struct IslandRootView: View {
                     CompactTrailingView(
                         activity: primary,
                         height: height,
-                        style: style(for: primary)
+                        style: style(for: primary),
+                        // The open panel's header shows the same live readout
+                        // 30pt below — one is enough.
+                        showsReadout: mode != .expanded
+                            || composition.expandedActivity?.id != primary.id
                     )
                 }
             }

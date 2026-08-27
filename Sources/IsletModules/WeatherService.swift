@@ -62,6 +62,10 @@ public enum WeatherService {
                 name: "temperature_unit",
                 value: unit == .fahrenheit ? "fahrenheit" : "celsius"
             ),
+            URLQueryItem(
+                name: "precipitation_unit",
+                value: unit == .fahrenheit ? "inch" : "mm"
+            ),
         ]
         guard let url = components.url else { throw ServiceError.decoding }
 

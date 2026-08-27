@@ -226,6 +226,9 @@ public final class WeatherProvider: SystemProvider {
                 title: "Weather unavailable",
                 subtitle: lastError,
                 icon: .symbol("exclamationmark.triangle.fill"),
+                // Flashes aren't expandable, so the trailing slot is the only
+                // visible signal that there's no reading.
+                trailingText: "--",
                 tint: .orange
             ),
             priority: .normal,
@@ -264,9 +267,12 @@ public final class WeatherProvider: SystemProvider {
             ),
         ]
         if snapshot.precipitation > 0 {
-            details.append(
-                ActivityDetail(label: "Precipitation", value: String(format: "%.1f mm", snapshot.precipitation))
-            )
+            // Unit-consistent with the temperature: 72°F next to "0.3 mm"
+            // reads as two countries in one panel.
+            let amount = settings.temperatureUnit == .fahrenheit
+                ? String(format: "%.2f in", snapshot.precipitation)
+                : String(format: "%.1f mm", snapshot.precipitation)
+            details.append(ActivityDetail(label: "Precipitation", value: amount))
         }
 
         return ActivityContent(

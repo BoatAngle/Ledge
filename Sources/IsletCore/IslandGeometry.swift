@@ -38,7 +38,8 @@ public enum IslandGeometry {
     /// Extra width per side in the compact state.
     ///
     /// Tighter than it looks like it should be. The camera housing is already
-    /// 220pt wide, so every point added here is doubled and the compact state
+    /// 200pt wide (IslandMetrics.standardNotch), so every point added here is
+    /// doubled and the compact state
     /// stretches toward a letterbox; hugging close keeps it reading as one
     /// object rather than a bar.
     public static let compactSidePadding: CGFloat = 52
@@ -52,8 +53,8 @@ public enum IslandGeometry {
 
     /// Wider than the old 420.
     ///
-    /// Apple's island expands to roughly 2.9× its idle width; at 420 against a
-    /// 220pt housing this only managed 1.9×, so opening it felt like a nudge
+    /// Apple's island expands to roughly 2.9× its idle width; at 420 against
+    /// the 200pt housing this only managed ~2×, so opening it felt like a nudge
     /// rather than an event.
     public static let expandedWidth: CGFloat = 468
     public static let expandedMinHeight: CGFloat = 86
@@ -137,7 +138,7 @@ public enum IslandGeometry {
         switch mode {
         case .idle:
             // Match the hardware's own curvature so idle is invisible.
-            return metrics.hasPhysicalNotch ? 10 : 10
+            return 10
         case .compact, .split:
             return bottomRadius
         case .expanded:

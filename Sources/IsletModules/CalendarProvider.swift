@@ -135,7 +135,9 @@ public final class CalendarProvider: SystemProvider {
                 priority: startsIn <= 120 ? .high : .normal,
                 content: ActivityContent(
                     title: event.title ?? "Event",
-                    subtitle: hasStarted ? "Happening now" : "Upcoming",
+                    // The calendar name carries information; "Upcoming" next
+                    // to a countdown carried none.
+                    subtitle: hasStarted ? "Happening now" : (event.calendar?.title ?? "Upcoming"),
                     icon: .symbol(joinURL != nil ? "video.fill" : "calendar"),
                     tint: hasStarted ? .red : .blue,
                     details: details,

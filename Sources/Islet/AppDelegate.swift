@@ -4,7 +4,7 @@ import IsletModules
 import IsletUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store = ActivityStore()
     private let settings = IsletSettings.shared
     private let registry = ProviderRegistry()
@@ -67,7 +67,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.server.timers = self.timerProvider
             self.server.weather = self.weatherProvider
             self.lockMonitor.start()
-            self.statusItem?.menu = self.buildMenu()
         }
 
         do {
@@ -91,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         if let appearanceObserver { NotificationCenter.default.removeObserver(appearanceObserver) }
+        if let demoObserver { NotificationCenter.default.removeObserver(demoObserver) }
         lockMonitor.stop()
         registry.stop()
         server.stop()
@@ -113,6 +113,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         prefs.target = self
         app.addItem(prefs)
+        app.addItem(.separator())
+        app.addItem(
+            withTitle: "Hide Islet",
+            action: #selector(NSApplication.hide(_:)),
+            keyEquivalent: "h"
+        )
+        let hideOthers = NSMenuItem(
+            title: "Hide Others",
+            action: #selector(NSApplication.hideOtherApplications(_:)),
+            keyEquivalent: "h"
+        )
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        app.addItem(hideOthers)
+        app.addItem(
+            withTitle: "Show All",
+            action: #selector(NSApplication.unhideAllApplications(_:)),
+            keyEquivalent: ""
+        )
         app.addItem(.separator())
         app.addItem(
             withTitle: "Quit Islet",
@@ -162,19 +180,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             accessibilityDescription: "Islet"
         )
         item.button?.image?.isTemplate = true
-        item.menu = buildMenu()
+        // Rebuilt on every open via NSMenuDelegate — a baked menu shows a
+        // running timer's remaining time from whenever it was last built.
+        let menu = NSMenu()
+        menu.delegate = self
+        item.menu = menu
         statusItem = item
     }
 
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let fresh = buildMenu()
+        for item in fresh.items {
+            fresh.removeItem(item)
+            menu.addItem(item)
+        }
+        menu.autoenablesItems = false
+    }
+
+    /// Actions first, configuration after — the Apple status-menu shape.
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
+        // Without this, every manual isEnabled below is silently overridden
+        // for any item with a live target/action.
+        menu.autoenablesItems = false
 
-        let header = NSMenuItem(title: displayStatus, action: nil, keyEquivalent: "")
-        header.isEnabled = false
-        menu.addItem(header)
+        menu.addItem(NSMenuItem.sectionHeader(title: displayStatus))
+
+        menu.addItem(timerMenuItem())
+
+        let weather = NSMenuItem(
+            title: "Show Weather",
+            action: #selector(showWeather),
+            keyEquivalent: ""
+        )
+        weather.target = self
+        weather.image = NSImage(systemSymbolName: "cloud.sun", accessibilityDescription: nil)
+        weather.isEnabled = settings.weatherMode != .off
+        menu.addItem(weather)
+
         menu.addItem(.separator())
 
         let modules = NSMenu()
+        modules.autoenablesItems = false
         for provider in allProviders {
             let item = NSMenuItem(
                 title: provider.displayName,
@@ -192,23 +240,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             modules.addItem(item)
         }
         let modulesItem = NSMenuItem(title: "Modules", action: nil, keyEquivalent: "")
+        modulesItem.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)
         modulesItem.submenu = modules
         menu.addItem(modulesItem)
 
-        menu.addItem(timerMenuItem())
-
-        let demo = NSMenuItem(title: "Run Demo Activity", action: #selector(runDemo), keyEquivalent: "")
+        let demo = NSMenuItem(title: "Show Demo Activity", action: #selector(runDemo), keyEquivalent: "")
         demo.target = self
+        demo.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil)
         menu.addItem(demo)
-
-        let weather = NSMenuItem(
-            title: "Show Weather",
-            action: #selector(showWeather),
-            keyEquivalent: ""
-        )
-        weather.target = self
-        weather.isEnabled = settings.weatherMode != .off
-        menu.addItem(weather)
 
         menu.addItem(.separator())
 
@@ -237,7 +276,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleModule(_ sender: NSMenuItem) {
         guard let identifier = sender.representedObject as? String,
-              let provider = allProviders.first(where: { $0.identifier == identifier })
+              let provider = allProviders.first(where: { $0.identifier == identifier }),
+              provider.isAvailable
         else { return }
         setModule(identifier, enabled: !isEnabled(provider))
     }
@@ -256,7 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         weatherProvider = registry.providers.compactMap { $0 as? WeatherProvider }.first
         server.timers = timerProvider
         server.weather = weatherProvider
-        statusItem?.menu = buildMenu()
+        // The status menu rebuilds itself on open (menuNeedsUpdate).
         // The settings window is NOT refreshed here: its panes observe
         // settings.moduleRevision and re-render themselves. Rebuilding its
         // content view used to teleport an open window to the Modules tab.
@@ -295,9 +335,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func timerMenuItem() -> NSMenuItem {
         let submenu = NSMenu()
+        submenu.autoenablesItems = false
         for minutes in [1, 5, 10, 25, 45] {
             let item = NSMenuItem(
-                title: "\(minutes) minutes",
+                title: minutes == 1 ? "1 Minute" : "\(minutes) Minutes",
                 action: #selector(startTimer(_:)),
                 keyEquivalent: ""
             )
@@ -319,9 +360,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 item.representedObject = timer.id
                 submenu.addItem(item)
             }
+            if running.count > 1 {
+                submenu.addItem(.separator())
+                let all = NSMenuItem(
+                    title: "Cancel All Timers",
+                    action: #selector(cancelAllTimers),
+                    keyEquivalent: ""
+                )
+                all.target = self
+                submenu.addItem(all)
+            }
         }
 
         let item = NSMenuItem(title: "Start Timer", action: nil, keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: "timer", accessibilityDescription: nil)
         item.submenu = submenu
         item.isEnabled = timerProvider != nil
         return item
@@ -337,31 +389,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func startTimer(_ sender: NSMenuItem) {
         guard let minutes = sender.representedObject as? Int else { return }
         timerProvider?.startTimer(label: nil, duration: TimeInterval(minutes * 60))
-        statusItem?.menu = buildMenu()
     }
 
     @objc private func cancelTimer(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         timerProvider?.cancel(id: id)
-        statusItem?.menu = buildMenu()
     }
 
+    @objc private func cancelAllTimers() {
+        timerProvider?.cancelAll()
+    }
+
+    private var demoObserver: NSObjectProtocol?
+
     @objc private func runDemo() {
+        let demoID = "demo.\(UUID().uuidString.prefix(6))"
+        // The demo's one button must visibly DO something — it's the first
+        // action a new user ever presses, and a dead button teaches that
+        // buttons are decoration.
+        if demoObserver == nil {
+            demoObserver = NotificationCenter.default.addObserver(
+                forName: .isletActionInvoked,
+                object: nil,
+                queue: .main
+            ) { [weak self] note in
+                guard (note.userInfo?["actionID"] as? String) == "demo.dismiss" else { return }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    for activity in self.store.composition.all where activity.source == "demo" {
+                        self.store.end(id: activity.id)
+                    }
+                }
+            }
+        }
         store.present(
             Activity(
-                id: "demo.\(UUID().uuidString.prefix(6))",
+                id: demoID,
                 source: "demo",
                 kind: .ongoing,
                 priority: .normal,
                 content: ActivityContent(
                     title: "Islet is running",
-                    subtitle: "Hover to expand, click to dismiss",
+                    subtitle: "Hover or click to expand",
                     body: "Post your own activities with the islet CLI.",
                     icon: .symbol("sparkles"),
                     tint: .accent,
                     progress: ActivityProgress(fraction: 0.62, label: "Demo activity"),
                     details: [ActivityDetail(label: "Source", value: "menu bar")],
-                    actions: [ActivityAction(id: "demo.dismiss", title: "Nice", symbol: "hand.thumbsup")]
+                    actions: [ActivityAction(id: "demo.dismiss", title: "Done", symbol: "checkmark")]
                 ),
                 expiresAt: Date().addingTimeInterval(12)
             )

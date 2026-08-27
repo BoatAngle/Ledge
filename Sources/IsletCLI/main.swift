@@ -318,7 +318,7 @@ func icon() -> ActivityIcon? {
 func tint() -> IsletColor? {
     guard let raw = parsed.string("tint") else { return nil }
     guard let color = IsletColor(parsing: raw) else {
-        fail("Unrecognised --tint \"\(raw)\". Use a name (blue, green…) or #RRGGBB.")
+        fail("Unrecognized --tint \"\(raw)\". Use a name (blue, green…) or #RRGGBB.")
     }
     return color
 }
@@ -371,7 +371,7 @@ func printUsage() {
       collapse     Close the panel.
       settings     Open the settings window.
                    --tab general|modules|weather|about
-                   --customize <module-id>  jump to a module's color/size/position
+                   --customize <module-id>  Jump to a module's color, size, and position
       ping         Check that Islet.app is running.
 
     CONTENT
@@ -389,7 +389,7 @@ func printUsage() {
       --detail "K=V,K2=V2"      Rows in the expanded panel.
       --open <url>              Opened when the activity is clicked.
 
-    BEHAVIOUR
+    BEHAVIOR
       --id <id>                 Reuse an id to update in place.
       --source <name>           Group activities for `end-all --source`.
       --priority <level>        background | low | normal | high | critical

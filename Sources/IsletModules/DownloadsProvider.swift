@@ -251,12 +251,19 @@ public final class DownloadsProvider: SystemProvider {
                     // bytes have landed but never how many are coming, and a
                     // progress bar built on a guess is worse than none.
                     progress: ActivityProgress(label: entries.count == 1 ? nil : "\(entries.count) files"),
-                    details: entries.prefix(4).map {
-                        ActivityDetail(
-                            label: $0.displayName,
-                            value: Self.byteFormatter.string(fromByteCount: $0.bytes)
-                        )
-                    },
+                    details: {
+                        var rows = entries.prefix(4).map {
+                            ActivityDetail(
+                                label: $0.displayName,
+                                value: Self.byteFormatter.string(fromByteCount: $0.bytes)
+                            )
+                        }
+                        // Same elision convention as the shelf's "+ N more".
+                        if entries.count > 4 {
+                            rows.append(ActivityDetail(label: "+ \(entries.count - 4) more", value: ""))
+                        }
+                        return rows
+                    }(),
                     actions: [
                         ActivityAction(
                             id: "downloads.reveal",

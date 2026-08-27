@@ -151,7 +151,7 @@ public final class DropShelf {
                     icon: .symbol("tray.full.fill"),
                     tint: .accent,
                     actions: [
-                        ActivityAction(id: "shelf.airdrop", title: "AirDrop", symbol: "airplayaudio"),
+                        ActivityAction(id: "shelf.airdrop", title: "AirDrop", symbol: "dot.radiowaves.left.and.right"),
                         ActivityAction(id: "shelf.reveal", title: "Reveal", symbol: "folder"),
                         ActivityAction(id: "shelf.clear", title: "Clear", symbol: "xmark", isDestructive: true),
                     ]
@@ -190,6 +190,7 @@ public final class DropShelf {
 
 /// The expanded panel for the shelf: a real file list you can drag back out of.
 public struct DropShelfView: View {
+    @Environment(\.islandTheme) private var theme
     public var shelf: DropShelf
 
     public init(shelf: DropShelf) {
@@ -197,18 +198,20 @@ public struct DropShelfView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // The shelf had drifted into a parallel visual system — its own
+        // fonts, paddings, and a raw SF Symbol that bypassed the glyph
+        // family. It speaks the panel's tokens now.
+        VStack(alignment: .leading, spacing: theme.panelSpacing) {
             HStack(spacing: 10) {
-                Image(systemName: "tray.full.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(IslandPalette.defaultTint)
+                ActivityIconView(icon: .symbol("tray.full.fill"), size: 15, tint: IslandDesign.accent)
                 Text(shelf.files.count == 1 ? "1 file" : "\(shelf.files.count) files")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(IslandPalette.primaryText)
+                    .font(theme.titleFont)
+                    .tracking(theme.titleTracking)
+                    .foregroundStyle(IslandDesign.Ink.primary)
                 Spacer(minLength: 0)
                 Text("Drag out to move")
-                    .font(.system(size: 10))
-                    .foregroundStyle(IslandPalette.tertiaryText)
+                    .font(IslandDesign.Text.caption)
+                    .foregroundStyle(IslandDesign.Ink.tertiary)
             }
 
             VStack(spacing: 4) {
@@ -218,8 +221,8 @@ public struct DropShelfView: View {
                 }
                 if shelf.files.count > 4 {
                     Text("+ \(shelf.files.count - 4) more")
-                        .font(.system(size: 10))
-                        .foregroundStyle(IslandPalette.tertiaryText)
+                        .font(IslandDesign.Text.caption)
+                        .foregroundStyle(IslandDesign.Ink.tertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .transition(.blurReplace)
                 }
@@ -229,8 +232,8 @@ public struct DropShelfView: View {
             // animation on the root.
             .animation(IslandMotion.content, value: shelf.files)
         }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 14)
+        .padding(.horizontal, IslandDesign.panelHorizontalPadding)
+        .padding(.bottom, IslandDesign.panelBottomPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             GeometryReader { proxy in
@@ -246,13 +249,13 @@ public struct DropShelfView: View {
                 .frame(width: 22, height: 22)
             VStack(alignment: .leading, spacing: 1) {
                 Text(url.lastPathComponent)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(IslandPalette.primaryText)
+                    .font(IslandDesign.Text.value)
+                    .foregroundStyle(IslandDesign.Ink.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(url.deletingLastPathComponent().lastPathComponent)
-                    .font(.system(size: 9))
-                    .foregroundStyle(IslandPalette.tertiaryText)
+                    .font(IslandDesign.Text.caption)
+                    .foregroundStyle(IslandDesign.Ink.tertiary)
                     .lineLimit(1)
             }
             Spacer(minLength: 6)
@@ -261,7 +264,7 @@ public struct DropShelfView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(IslandPalette.tertiaryText)
+                    .foregroundStyle(IslandDesign.Ink.tertiary)
             }
             .buttonStyle(.plain)
         }

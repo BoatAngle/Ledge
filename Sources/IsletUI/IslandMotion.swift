@@ -23,6 +23,12 @@ public enum IslandMotion {
     /// — but not so slowly that the island looks soft while you're waiting.
     public static let gooRise: TimeInterval = 0.16
     public static let gooFall: TimeInterval = 0.30
+
+    /// Press choreography, shared by every button style: in is near-instant
+    /// (input acknowledgment), release carries the spring personality. One
+    /// vocabulary — three views had drifted to three tunings.
+    public static let pressIn = Animation.snappy(duration: 0.12, extraBounce: 0)
+    public static let pressRelease = Animation.spring(response: 0.32, dampingFraction: 0.55)
 }
 
 /// Drives the metaball blur through a rise-and-fall pulse whenever the island's

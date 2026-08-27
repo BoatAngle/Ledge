@@ -6,3 +6,4 @@ dist/
 *.xcodeproj
 *.xcworkspace
 Islet.app/
+.build-stale*/

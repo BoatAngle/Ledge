@@ -54,10 +54,20 @@ public enum IsletDuration {
     }
 
     /// A default label for a timer of a given length.
+    ///
+    /// The bare duration, without the word "timer": the label sits beside a
+    /// timer glyph and a countdown, so "20 minute timer / Timer" said
+    /// everything twice. Mixed durations compose ("1 hour 30 minutes")
+    /// instead of collapsing to "90 minute".
     public static func describe(_ duration: TimeInterval) -> String {
         let total = Int(duration.rounded())
-        if total >= 3600, total % 3600 == 0 { return "\(total / 3600) hour timer" }
-        if total >= 60, total % 60 == 0 { return "\(total / 60) minute timer" }
-        return "\(total) second timer"
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        var parts: [String] = []
+        if hours > 0 { parts.append(hours == 1 ? "1 hour" : "\(hours) hours") }
+        if minutes > 0 { parts.append(minutes == 1 ? "1 minute" : "\(minutes) minutes") }
+        if hours == 0, seconds > 0 { parts.append(seconds == 1 ? "1 second" : "\(seconds) seconds") }
+        return parts.isEmpty ? "Timer" : parts.joined(separator: " ")
     }
 }

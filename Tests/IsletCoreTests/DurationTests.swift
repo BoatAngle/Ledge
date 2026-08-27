@@ -38,9 +38,10 @@ final class DurationTests: XCTestCase {
     }
 
     func testDescribePicksTheNaturalUnit() {
-        XCTAssertEqual(IsletDuration.describe(1500), "25 minute timer")
-        XCTAssertEqual(IsletDuration.describe(7200), "2 hour timer")
-        XCTAssertEqual(IsletDuration.describe(45), "45 second timer")
-        XCTAssertEqual(IsletDuration.describe(90), "90 second timer")
+        XCTAssertEqual(IsletDuration.describe(1500), "25 minutes")
+        XCTAssertEqual(IsletDuration.describe(7200), "2 hours")
+        XCTAssertEqual(IsletDuration.describe(45), "45 seconds")
+        XCTAssertEqual(IsletDuration.describe(90), "1 minute 30 seconds")
+        XCTAssertEqual(IsletDuration.describe(5400), "1 hour 30 minutes")
     }
 }

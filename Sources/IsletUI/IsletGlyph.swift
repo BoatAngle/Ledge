@@ -167,14 +167,29 @@ public enum IsletGlyph: String, CaseIterable, Sendable {
 
         // MARK: Arrows
 
-        case .arrowUp, .upload:
+        case .arrowUp:
             if isSolid {
                 polyF([(12, 4.2), (19.6, 12.2), (15.1, 12.2), (15.1, 20),
                        (8.9, 20), (8.9, 12.2), (4.4, 12.2)])
             } else {
+                // Open chevron head, matching arrowDown — the closed triangle
+                // made the up arrow visibly heavier than its twin.
                 line(12, 20, 12, 5.4)
-                polyO([(6.2, 11.2), (12, 5.2), (17.8, 11.2)])
-                path.closeSubpath()
+                path.move(to: p(6.2, 11.2)); path.addLine(to: p(12, 5.2))
+                path.addLine(to: p(17.8, 11.2))
+            }
+        case .upload:
+            // Mirrors .download — a tray you lift out of, not a bare arrow.
+            if isSolid {
+                polyF([(12, 2.8), (18.4, 9.4), (14.6, 9.4), (14.6, 15.6),
+                       (9.4, 15.6), (9.4, 9.4), (5.6, 9.4)])
+                rectF(3.6, 17.4, 16.8, 2.8, 1.4)
+            } else {
+                line(12, 3.2, 12, 14.6)
+                path.move(to: p(7.4, 7.6)); path.addLine(to: p(12, 3))
+                path.addLine(to: p(16.6, 7.6))
+                path.move(to: p(4.2, 16.4)); path.addLine(to: p(4.2, 19.4))
+                path.addLine(to: p(19.8, 19.4)); path.addLine(to: p(19.8, 16.4))
             }
         case .arrowDown:
             if isSolid {
@@ -509,12 +524,10 @@ public enum IsletGlyph: String, CaseIterable, Sendable {
         "folder": .folder,
         "checkmark": .check, "checkmark.circle": .check, "checkmark.seal": .check,
         "xmark": .cross, "xmark.circle": .cross, "xmark.octagon": .cross,
-        "exclamationmark.triangle": .cross,
         "sparkles": .sparkle, "film": .film, "terminal": .terminal,
         "arrow.clockwise": .refresh, "gauge": .gauge, "circle": .dot,
-        "briefcase": .tray, "person": .dot, "figure.run": .dot,
-        "gamecontroller": .dot, "bed.double": .moon, "book": .calendar,
-        "car": .dot, "brain.head.profile": .dot,
+        "briefcase": .tray,
+        "bed.double": .moon, "book": .calendar,
     ]
 }
 

@@ -334,7 +334,10 @@ struct ModuleCustomizationSheet: View {
         func makeBody(configuration: Configuration) -> some View {
             configuration.label
                 .scaleEffect(configuration.isPressed ? 0.9 : 1)
-                .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
+                .animation(
+                    configuration.isPressed ? IslandMotion.pressIn : IslandMotion.pressRelease,
+                    value: configuration.isPressed
+                )
         }
     }
 

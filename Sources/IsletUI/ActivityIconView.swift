@@ -49,7 +49,7 @@ public struct ActivityIconView: View {
     public var size: CGFloat
     public var tint: Color
 
-    public init(icon: ActivityIcon?, size: CGFloat, tint: Color = IslandPalette.primaryText) {
+    public init(icon: ActivityIcon?, size: CGFloat, tint: Color = IslandDesign.Ink.primary) {
         self.icon = icon
         self.size = size
         self.tint = tint
@@ -81,7 +81,7 @@ public struct ActivityIconView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: size, height: size)
-                        .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: size * IslandDesign.markCornerRatio, style: .continuous))
                 } else {
                     fallback
                 }
@@ -92,7 +92,7 @@ public struct ActivityIconView: View {
     }
 
     private var fallback: some View {
-        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+        RoundedRectangle(cornerRadius: size * IslandDesign.markCornerRatio, style: .continuous)
             .fill(tint.opacity(0.22))
             .frame(width: size, height: size)
             .overlay {

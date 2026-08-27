@@ -158,11 +158,8 @@ struct ThemedPane<Content: View>: View {
     var body: some View {
         // Read inside body so @Observable registers the dependency and the
         // pane re-renders when the theme changes.
-        let themed = content.islandTheme(.preset(settings.theme))
-        if #available(macOS 26.0, *) {
-            themed.scrollEdgeEffectStyle(.soft, for: .top)
-        } else {
-            themed
-        }
+        content
+            .islandTheme(.preset(settings.theme))
+            .modifier(SoftTopScrollEdge())
     }
 }

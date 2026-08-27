@@ -17,7 +17,7 @@ public struct LiveTimeText: View {
         target: Date? = nil,
         countUpFrom: Date? = nil,
         font: Font = .system(size: 13, weight: .semibold, design: .rounded),
-        color: Color = IslandPalette.primaryText
+        color: Color = IslandDesign.Ink.primary
     ) {
         self.target = target
         self.countUpFrom = countUpFrom

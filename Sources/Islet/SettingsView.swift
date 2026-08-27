@@ -309,9 +309,7 @@ private struct ThemeCardPressStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(
-                configuration.isPressed
-                    ? .snappy(duration: 0.12, extraBounce: 0)
-                    : .spring(response: 0.32, dampingFraction: 0.6),
+                configuration.isPressed ? IslandMotion.pressIn : IslandMotion.pressRelease,
                 value: configuration.isPressed
             )
     }

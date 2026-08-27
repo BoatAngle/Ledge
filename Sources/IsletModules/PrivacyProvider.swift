@@ -65,7 +65,7 @@ public final class PrivacyProvider: SystemProvider {
         let tint: IsletColor
         switch (state.camera, state.microphone) {
         case (true, true):
-            title = "Camera & Mic in use"
+            title = "Camera & Microphone in use"
             symbol = "video.fill"
             tint = IsletColor.orange
         case (true, false):
@@ -100,7 +100,9 @@ public final class PrivacyProvider: SystemProvider {
                 priority: .low,
                 content: ActivityContent(
                     title: title,
-                    subtitle: "Something is using it right now",
+                    subtitle: state.camera && state.microphone
+                        ? "Something is using them right now"
+                        : "Something is using it right now",
                     icon: .symbol(symbol),
                     tint: tint
                 ),

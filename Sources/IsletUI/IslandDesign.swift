@@ -1,3 +1,4 @@
+import IsletCore
 import SwiftUI
 
 /// The island's visual vocabulary.
@@ -22,39 +23,13 @@ public enum IslandDesign {
 
     // MARK: Surface
 
-    /// True black, matching the bezel.
-    public static let bezelBlack = Color.black
-    /// The faintest lift at the bottom of the body. Below ~#0C it stops reading
-    /// as a surface; above it, the seam at the notch becomes visible.
-    public static let surfaceLift = Color(white: 0.045)
-
-    /// Fill for the island body.
-    ///
-    /// `liftsAtBottom` is false at idle, where the island *is* the notch and any
-    /// deviation from pure black would show.
-    public static func surfaceFill(liftsAtBottom: Bool) -> LinearGradient {
-        LinearGradient(
-            colors: liftsAtBottom ? [bezelBlack, surfaceLift] : [bezelBlack, bezelBlack],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    /// A hairline catching light along the lower edge.
-    ///
-    /// Drawn as a gradient stroke that fades to nothing by the halfway point, so
-    /// only the bottom curve is lit — a full outline would look like a border.
-    public static let rimHighlight = LinearGradient(
-        stops: [
-            .init(color: .white.opacity(0), location: 0.0),
-            .init(color: .white.opacity(0), location: 0.45),
-            .init(color: .white.opacity(0.10), location: 1.0),
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
-
+    // The surface itself is theme-owned — see IslandTheme.surfaceFill and
+    // its per-theme surfaceLift values.
     public static let rimWidth: CGFloat = 0.75
+
+    /// One corner-radius ratio for every mark and chip. Four ratios had
+    /// drifted in (0.24/0.26/0.28/0.3) across sibling elements.
+    public static let markCornerRatio: CGFloat = 0.28
 
     // MARK: Shadow
 
@@ -90,25 +65,21 @@ public enum IslandDesign {
 
     /// A deliberate ramp rather than ad-hoc point sizes.
     ///
-    /// Negative tracking on the larger sizes: SF tightens optically as it grows,
-    /// and text set without it looks loose next to Apple's own.
+    /// Title, subtitle, and metric fonts are THEME-OWNED — see
+    /// IslandTheme.titleFont / subtitleFont / metricFont(_:). Only the sizes
+    /// no theme varies live here.
     public enum Text {
-        public static let title = Font.system(size: 14, weight: .semibold)
-        public static let titleTracking: CGFloat = -0.24
-
-        public static let subtitle = Font.system(size: 11.5, weight: .regular)
         public static let body = Font.system(size: 12, weight: .regular)
 
         public static let label = Font.system(size: 11, weight: .regular)
         public static let value = Font.system(size: 11, weight: .medium)
         public static let caption = Font.system(size: 10, weight: .medium)
 
-        /// Numbers that change in place — countdowns, percentages.
-        public static func metric(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-            .system(size: size, weight: weight, design: .rounded)
-        }
-
         public static let button = Font.system(size: 11.5, weight: .semibold)
+
+        /// The expanded header's trailing readout — countdowns and metrics
+        /// share the slot, so they share the size (they had drifted 17 vs 16).
+        public static let headerMetricSize: CGFloat = 17
     }
 
     // MARK: Colour
@@ -117,11 +88,18 @@ public enum IslandDesign {
         public static let primary = Color.white
         public static let secondary = Color.white.opacity(0.66)
         public static let tertiary = Color.white.opacity(0.42)
+        /// Structural marks quieter than tertiary text — inactive page dots,
+        /// the pre-glass button border.
+        public static let quaternary = Color.white.opacity(0.22)
         public static let separator = Color.white.opacity(0.07)
         public static let controlFill = Color.white.opacity(0.11)
         public static let controlStroke = Color.white.opacity(0.09)
         public static let trackFill = Color.white.opacity(0.11)
     }
+
+    /// The app accent as a SwiftUI color, for the few places outside an
+    /// activity's own tint.
+    public static let accent = Color(IsletColor.accent)
 
     /// Tinted fills get a slight vertical gradient rather than a flat colour —
     /// flat saturated blocks are the fastest way to look unfinished.
@@ -151,12 +129,6 @@ public extension View {
         )
     }
 
-    /// Title text with the ramp's tracking applied.
-    func islandTitle() -> some View {
-        font(IslandDesign.Text.title)
-            .tracking(IslandDesign.Text.titleTracking)
-            .foregroundStyle(IslandDesign.Ink.primary)
-    }
 }
 
 /// A soft bloom behind a tinted glyph.
@@ -213,7 +185,7 @@ public struct IconChip<Content: View>: View {
         content
             .frame(width: size, height: size)
             .background {
-                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                RoundedRectangle(cornerRadius: size * IslandDesign.markCornerRatio, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [tint.opacity(0.30), tint.opacity(0.16)],
@@ -223,7 +195,7 @@ public struct IconChip<Content: View>: View {
                     )
             }
             .overlay {
-                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                RoundedRectangle(cornerRadius: size * IslandDesign.markCornerRatio, style: .continuous)
                     .strokeBorder(tint.opacity(0.28), lineWidth: 0.75)
             }
     }
@@ -252,12 +224,8 @@ public struct IslandButtonStyle: ButtonStyle {
             .overlay { border }
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .opacity(configuration.isPressed ? 0.75 : 1)
-            // Press-in is near-instant (input acknowledgment); release
-            // carries the spring personality.
             .animation(
-                configuration.isPressed
-                    ? .snappy(duration: 0.12, extraBounce: 0)
-                    : .spring(response: 0.32, dampingFraction: 0.55),
+                configuration.isPressed ? IslandMotion.pressIn : IslandMotion.pressRelease,
                 value: configuration.isPressed
             )
     }
@@ -300,7 +268,7 @@ public struct IslandButtonStyle: ButtonStyle {
                 Color.clear
             } else {
                 Capsule(style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.75)
+                    .strokeBorder(IslandDesign.Ink.quaternary, lineWidth: 0.75)
             }
         case .plain:
             Color.clear

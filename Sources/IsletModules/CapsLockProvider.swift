@@ -54,7 +54,7 @@ public final class CapsLockProvider: SystemProvider {
             content: ActivityContent(
                 title: isOn ? "Caps Lock On" : "Caps Lock Off",
                 icon: .symbol(isOn ? "capslock.fill" : "capslock"),
-                trailingText: isOn ? "ON" : "OFF",
+                trailingText: isOn ? "On" : "Off",
                 tint: isOn ? IsletColor.green : IsletColor.gray
             ),
             dwell: 1.1

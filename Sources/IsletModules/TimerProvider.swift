@@ -111,7 +111,9 @@ public final class TimerProvider: SystemProvider {
                 priority: .normal,
                 content: ActivityContent(
                     title: timer.label,
-                    subtitle: "Timer",
+                    // Apple's own timer Live Activity pattern: the end time
+                    // carries information the countdown alone doesn't.
+                    subtitle: "Ends at \(timer.fireDate.formatted(date: .omitted, time: .shortened))",
                     icon: .symbol("timer"),
                     tint: .orange,
                     actions: [
@@ -161,6 +163,9 @@ public final class TimerProvider: SystemProvider {
                 title: timer.label,
                 subtitle: "Timer finished",
                 icon: .symbol("timer.circle.fill"),
+                // Flashes aren't expandable and compact shows no title — the
+                // trailing slot is the only place the chime can say why.
+                trailingText: "Done",
                 tint: .orange
             ),
             priority: .high,

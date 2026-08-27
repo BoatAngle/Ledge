@@ -8,7 +8,7 @@ real time.
 
 ```bash
 make run     # compile + assemble Islet.app + relaunch
-make test    # 69 tests across Core, UI, and Modules
+make test    # 84+ tests across Core, UI, and Modules
 make app     # bundle only
 make stop    # pkill
 ```
@@ -62,9 +62,9 @@ belongs in the store.
 
 ## Rendering notes
 
-- `goo` is pulsed only on structure changes. A permanent blur+threshold pass
-  would soften the fillets for no benefit. `GooDriver.pulse()` runs it 0 → 16 → 0
-  over 420ms.
+- `goo` is pulsed only on shape-mode changes (idle/compact/split). A permanent
+  blur+threshold pass would soften the fillets for no benefit. The pulse is
+  asymmetric: 0 → 16 in 0.16s, back to 0 in 0.30s.
 - The expanded panel **measures itself** via `ExpandedHeightKey` rather than being
   estimated from constants. The old estimator drifted the moment fonts changed;
   don't reintroduce it.
@@ -91,8 +91,9 @@ Deliberate, and worth preserving:
   Accessibility.
 - Privacy indicators query CoreAudio/CoreMediaIO for whether *someone else* is
   using the devices. Islet never opens the camera or mic.
-- Exactly three modules prompt, each independently declinable: Now Playing
-  (Automation), Calendar (read-only), Downloads (folder access).
+- Exactly four modules prompt, each independently declinable: Now Playing
+  (Automation), Calendar (read-only), Downloads (folder access), and Weather
+  (Location — only when first used).
 - No Full Disk Access. Downloads are read from the partial files in
   `~/Downloads`, not from Safari's container.
 
@@ -151,7 +152,7 @@ control styling. Add to it rather than putting point sizes in a view.
 
 The constraint that shapes all of it: **the island overlaps the physical camera
 housing, so the top must stay true black.** Depth originates at the bottom edge
-and falls downward — hence `surfaceFill(liftsAtBottom:)` running dark-to-lighter
+and falls downward — hence the theme's `surfaceFill` running dark-to-lighter
 going *down*, the opposite of the usual light-from-above treatment. At idle
 `hasDepth` is false and the shadow spec is `.none`; anything else shows a seam
 where drawn black meets real black.

@@ -70,11 +70,20 @@ public struct CompactTrailingView: View {
     public var activity: Activity
     public var height: CGFloat
     public var style: ActivityStyle
+    /// False while this activity's panel is open: the panel header shows the
+    /// same countdown/metric 30pt below, and one live readout is enough.
+    public var showsReadout: Bool
 
-    public init(activity: Activity, height: CGFloat, style: ActivityStyle = .placeholder) {
+    public init(
+        activity: Activity,
+        height: CGFloat,
+        style: ActivityStyle = .placeholder,
+        showsReadout: Bool = true
+    ) {
         self.activity = activity
         self.height = height
         self.style = style
+        self.showsReadout = showsReadout
     }
 
     public var body: some View {
@@ -87,6 +96,10 @@ public struct CompactTrailingView: View {
                     isAnimating: true,
                     size: CGSize(width: 18 * style.scale, height: (height - 16) * style.scale)
                 )
+            } else if !showsReadout,
+                      content.countdownTarget != nil || content.countUpFrom != nil
+                        || content.trailingText != nil {
+                EmptyView()
             } else if content.countdownTarget != nil || content.countUpFrom != nil {
                 LiveTimeText(
                     target: content.countdownTarget,
@@ -271,12 +284,12 @@ public struct ExpandedView: View {
                 LiveTimeText(
                     target: content.countdownTarget,
                     countUpFrom: content.countUpFrom,
-                    font: theme.metricFont(17),
+                    font: theme.metricFont(IslandDesign.Text.headerMetricSize),
                     color: style.accentColor
                 )
             } else if let trailing = content.trailingText {
                 Text(trailing)
-                    .font(theme.metricFont(16))
+                    .font(theme.metricFont(IslandDesign.Text.headerMetricSize))
                     .monospacedDigit()
                     .foregroundStyle(style.accentColor)
                     .contentTransition(.numericText())
@@ -299,7 +312,7 @@ public struct ExpandedView: View {
                 )
             }
         } else if content.icon != nil {
-            Artwork(icon: content.icon, size: 38, cornerRadius: 38 * 0.26)
+            Artwork(icon: content.icon, size: size, cornerRadius: size * IslandDesign.markCornerRatio)
         } else {
             chipped(size: size) {
                 Circle()
@@ -334,11 +347,11 @@ public struct ExpandedView: View {
             content()
                 .frame(width: size, height: size)
                 .background {
-                    RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                    RoundedRectangle(cornerRadius: size * IslandDesign.markCornerRatio, style: .continuous)
                         .fill(Color.white.opacity(0.13))
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                    RoundedRectangle(cornerRadius: size * IslandDesign.markCornerRatio, style: .continuous)
                         .strokeBorder(
                             LinearGradient(
                                 colors: [.white.opacity(0.34), .white.opacity(0.10)],
@@ -366,8 +379,11 @@ public struct ExpandedView: View {
                     Text(detail.label)
                         .font(IslandDesign.Text.label)
                         .foregroundStyle(IslandDesign.Ink.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                     Spacer(minLength: IslandDesign.space(3))
                     Text(detail.value)
+                        .layoutPriority(1)
                         .font(IslandDesign.Text.value)
                         .foregroundStyle(IslandDesign.Ink.secondary)
                         .monospacedDigit()
@@ -459,8 +475,11 @@ public struct ExpandedView: View {
                     onSelect(sibling.id)
                 } label: {
                     Capsule(style: .continuous)
-                        .fill(isCurrent ? IslandDesign.Ink.primary : Color.white.opacity(0.22))
+                        .fill(isCurrent ? IslandDesign.Ink.primary : IslandDesign.Ink.quaternary)
                         .frame(width: isCurrent ? 15 : 5, height: 5)
+                        // The visual stays a 5pt dot; the target doesn't.
+                        .frame(minWidth: 16, minHeight: 14)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

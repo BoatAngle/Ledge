@@ -114,6 +114,10 @@ public final class VolumeProvider: SystemProvider {
     private func announceDevice(name: String?, device: AudioDeviceID) {
         guard let store, let name else { return }
         let isBluetooth = CoreAudioBridge.isBluetooth(device)
+        // Only announce devices someone deliberately connected. Docking a
+        // laptop reroutes audio to HDMI/USB as a side effect — the user did
+        // not "connect headphones", and a HUD for it reads as noise.
+        guard isBluetooth else { return }
         store.flash(
             id: "system.audioDevice",
             nativeView: .volume,

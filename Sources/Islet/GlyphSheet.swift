@@ -27,14 +27,18 @@ enum GlyphSheet {
                                 // Both weights together: the only way to see
                                 // whether a solid mark still reads as the same
                                 // idea as its outline.
+                                // Audits the weights the themes actually use:
+                                // Glass outlines, Vivid solids. Hardcoding
+                                // these would let a theme retune drift past
+                                // the sheet unnoticed.
                                 HStack(spacing: 10) {
                                     IsletGlyphView(
                                         glyph: item, size: glyph, tint: .white,
-                                        lineWidth: 1.9, weight: .outline
+                                        lineWidth: IslandTheme.glass.glyphLineWidth, weight: .outline
                                     )
                                     IsletGlyphView(
                                         glyph: item, size: glyph, tint: .white,
-                                        lineWidth: 2.1, weight: .solid
+                                        lineWidth: IslandTheme.vivid.glyphLineWidth, weight: .solid
                                     )
                                 }
                                 Text(item.rawValue)

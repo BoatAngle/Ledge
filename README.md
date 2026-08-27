@@ -2,6 +2,8 @@
 
 A Dynamic Island for macOS — and a live-activity API for everything else on your Mac.
 
+![The island — the closed pill over the desktop, and the expanded Glass panel](docs/hero.png)
+
 Islet turns the MacBook notch into the thing Apple built for the iPhone: a small
 black shape that grows when something happens, splits when two things happen at
 once, and drops down into a panel when you want the detail. It ships the system
@@ -51,7 +53,7 @@ the same dimensions.
 - **Downloads** — in-progress downloads from any browser, and a completion notice
 - **Drop shelf** — drag files onto the notch to park them, then drag them back out, AirDrop, or reveal in Finder
 - **Battery & Charging** — announces plug-in, low-battery thresholds, and full charge
-- **Sound & Output Device** — volume HUD, plus "your AirPods just connected"
+- **Sound & Output** — volume HUD, plus "your AirPods just connected"
 - **Display Brightness** — brightness HUD
 - **Focus** — the active Focus, persistently but quietly
 - **Caps Lock** — a small confirmation
@@ -157,7 +159,10 @@ islet run -- <cmd> Run a command, showing progress; reports success or failure.
 islet timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
 islet shelf [files] Park files on the island. No arguments clears it.
 islet weather      Show current conditions on the island.
-islet settings     Open Settings. --tab general|modules|weather|about
+islet expand [id]  Open the panel, optionally on a specific activity.
+islet collapse     Close the panel.
+islet settings     Open Settings. --tab general|modules|weather|about,
+                   --customize <module-id>
 islet ping         Check that Islet.app is running.
 ```
 
@@ -179,7 +184,7 @@ Only `title` is required — you never have to write empty arrays.
 
 ## Icons
 
-Islet draws its own — 37 marks on a single 24pt grid, in outline and solid
+Islet draws its own — 39 marks on a single 24pt grid, in outline and solid
 weights, with the weight chosen by the theme. SF Symbols are excellent, but they
 carry Apple's optical conventions; at 20pt on black they read as system icons
 borrowed onto someone else's surface.
@@ -215,7 +220,7 @@ as modules are added.
 
 ## Permissions
 
-Three prompts, each from one module, each declinable without affecting anything else:
+Four prompts, each from one module, each declinable without affecting anything else:
 
 - **Automation** (Music/Spotify) — Now Playing.
 - **Calendar** — the next-meeting module. Read-only.
