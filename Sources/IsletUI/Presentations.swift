@@ -173,6 +173,9 @@ public struct ExpandedView: View {
     public var onSelect: (String) -> Void
     public var onAction: (ActivityAction) -> Void
     public var onDismiss: () -> Void
+    /// Open the owning app. Reachable only through the header row — a tap on
+    /// the panel's background dismisses, it never launches anything.
+    public var onOpen: () -> Void
 
     public init(
         activity: Activity,
@@ -180,7 +183,8 @@ public struct ExpandedView: View {
         style: ActivityStyle = .placeholder,
         onSelect: @escaping (String) -> Void = { _ in },
         onAction: @escaping (ActivityAction) -> Void = { _ in },
-        onDismiss: @escaping () -> Void = {}
+        onDismiss: @escaping () -> Void = {},
+        onOpen: @escaping () -> Void = {}
     ) {
         self.activity = activity
         self.siblings = siblings
@@ -188,12 +192,17 @@ public struct ExpandedView: View {
         self.onSelect = onSelect
         self.onAction = onAction
         self.onDismiss = onDismiss
+        self.onOpen = onOpen
     }
 
     public var body: some View {
         let content = activity.content
         VStack(alignment: .leading, spacing: theme.panelSpacing) {
             header(content)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if activity.openURL != nil { onOpen() }
+                }
 
             if let body = content.body {
                 Text(body)

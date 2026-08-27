@@ -18,6 +18,7 @@ public final class DropShelf {
 
     private weak var store: ActivityStore?
     private var actionObserver: NSObjectProtocol?
+    private var hintTask: Task<Void, Never>?
 
     public static let activityID = "system.dropShelf"
     private static let hintID = "system.dropShelf.hint"
@@ -47,8 +48,17 @@ public final class DropShelf {
     // MARK: - Drag lifecycle
 
     public func dragEntered() {
+        guard !isTargeted else { return }
         isTargeted = true
-        showHint()
+        // A beat before the island reacts: a drag merely PASSING over the
+        // island shouldn't make it erupt. 200ms is invisible to someone
+        // actually aiming at the notch and filters everyone who isn't.
+        hintTask?.cancel()
+        hintTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled, self?.isTargeted == true else { return }
+            self?.showHint()
+        }
     }
 
     /// Called continuously while a drag hovers, which keeps the hint's expiry
@@ -60,11 +70,16 @@ public final class DropShelf {
     /// an ongoing activity at that priority would wedge the island permanently.
     /// Expiring on its own makes the failure self-healing.
     public func dragUpdated() {
-        guard isTargeted else { return }
+        // Refresh only a hint that's already up — refreshing during the entry
+        // delay would show it early and defeat the transit filter.
+        guard isTargeted, hintShown else { return }
         showHint()
     }
 
+    private var hintShown = false
+
     private func showHint() {
+        hintShown = true
         store?.present(
             Activity(
                 id: Self.hintID,
@@ -87,6 +102,9 @@ public final class DropShelf {
     public func dragExited() {
         guard isTargeted else { return }
         isTargeted = false
+        hintShown = false
+        hintTask?.cancel()
+        hintTask = nil
         store?.end(id: Self.hintID)
     }
 

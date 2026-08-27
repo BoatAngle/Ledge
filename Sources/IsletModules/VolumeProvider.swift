@@ -105,7 +105,9 @@ public final class VolumeProvider: SystemProvider {
                 tint: IsletColor.cyan,
                 progress: ActivityProgress(fraction: muted ? 0 : Double(volume))
             ),
-            dwell: 1.3
+            // Longer than typical press cadence, so a tap–think–tap rhythm
+            // merges into one HUD episode instead of erupting per press.
+            dwell: 2.0
         )
     }
 

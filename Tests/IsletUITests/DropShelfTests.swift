@@ -39,11 +39,16 @@ final class DropShelfTests: XCTestCase {
     /// The hint must expire on its own. It sits at `.critical`, so if AppKit
     /// ever fails to deliver `draggingExited` an ongoing one would wedge the
     /// island permanently.
-    func testHoverHintExpiresOnItsOwn() {
+    func testHoverHintExpiresOnItsOwn() async throws {
         let store = ActivityStore()
         let shelf = DropShelf()
         shelf.attach(to: store)
         shelf.dragEntered()
+
+        // The hint deliberately waits ~200ms so a drag merely passing over
+        // the island doesn't erupt; a real hover outlasts the delay.
+        XCTAssertNil(store.composition.primary, "the hint must not appear for a transit")
+        try await Task.sleep(for: .milliseconds(350))
 
         let hint = store.composition.primary
         XCTAssertEqual(hint?.kind, .transient)

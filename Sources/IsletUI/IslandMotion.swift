@@ -11,17 +11,18 @@ public enum IslandMotion {
     /// Content swaps inside a stable shape — a shade quicker so text doesn't
     /// lag the container it lives in.
     public static let content = Animation.spring(response: 0.30, dampingFraction: 0.86)
-    /// Opening the panel. Looser, with a little overshoot — an invitation.
-    public static let expand = Animation.spring(response: 0.50, dampingFraction: 0.76)
-    /// Closing it. Tighter and nearly critically damped: putting something
-    /// away shouldn't bounce. Asymmetry between open and close is most of what
-    /// separates "fluid" from "springy".
-    public static let collapse = Animation.spring(response: 0.38, dampingFraction: 0.92)
+    /// Opening the panel. A breath of overshoot, but FAST — the first tuning
+    /// (0.50) read as sluggish on real hands: an invitation is not a flourish.
+    public static let expand = Animation.spring(response: 0.40, dampingFraction: 0.80)
+    /// Closing it. Quick and nearly critically damped: when the user is done,
+    /// the island's job is to get out of the way immediately.
+    public static let collapse = Animation.spring(response: 0.30, dampingFraction: 0.95)
     /// Peak blur radius during a split or merge.
     public static let gooPeak: CGFloat = 16
-    /// The pulse is asymmetric: liquid snaps together fast and settles slowly.
+    /// The pulse is asymmetric: liquid snaps together fast and settles slowly
+    /// — but not so slowly that the island looks soft while you're waiting.
     public static let gooRise: TimeInterval = 0.16
-    public static let gooFall: TimeInterval = 0.39
+    public static let gooFall: TimeInterval = 0.30
 }
 
 /// Drives the metaball blur through a rise-and-fall pulse whenever the island's

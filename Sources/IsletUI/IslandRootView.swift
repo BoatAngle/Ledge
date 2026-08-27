@@ -21,7 +21,10 @@ public struct IslandRootView: View {
     @State private var goo = GooDriver()
     @State private var isHovering = false
     @State private var hoverTask: Task<Void, Never>?
-    @State private var hoverSwell: CGFloat = 1
+    /// Where the pointer was when the current dwell timer started. The timer
+    /// restarts whenever the pointer strays far from this anchor, so only a
+    /// pointer that actually RESTS on the island opens the panel.
+    @State private var dwellAnchor: CGPoint?
     @State private var measuredPanelHeight: CGFloat = IslandGeometry.expandedMinHeight
 
     public init(
@@ -159,17 +162,22 @@ public struct IslandRootView: View {
         .keyframeAnimator(initialValue: 1.0, trigger: store.lastArrivalID) { view, scale in
             view.scaleEffect(scale, anchor: .top)
         } keyframes: { _ in
-            // A flat 1.0 → 1.0 track when arrivals are muted: same shape,
-            // no visible motion, no builder branching.
-            let peak = settings.animateArrivals ? 1.045 : 1.0
+            // A flat 1.0 → 1.0 track when arrivals are muted — and while the
+            // panel is open: bouncing 468pt of content someone is reading is
+            // not a nudge, it's a shove.
+            let peak = settings.animateArrivals && mode != .expanded ? 1.045 : 1.0
             KeyframeTrack(\.self) {
                 SpringKeyframe(peak, duration: 0.14, spring: Spring(response: 0.28, dampingRatio: 0.85))
                 SpringKeyframe(1.0, duration: 0.50, spring: Spring(response: 0.40, dampingRatio: 0.60))
             }
         }
-        .scaleEffect(hoverSwell, anchor: .top)
         .contentShape(Rectangle())
-        .onHover { hovering in handleHover(hovering) }
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active(let location): handleHoverMove(location)
+            case .ended: handleHoverExit()
+            }
+        }
         .onTapGesture { handleTap() }
         .animation(IslandMotion.shape, value: composition.structureKey)
         // Open carries overshoot (an invitation); close settles dead (an
@@ -177,7 +185,13 @@ public struct IslandRootView: View {
         .animation(mode == .expanded ? IslandMotion.expand : IslandMotion.collapse, value: mode)
         .animation(IslandMotion.content, value: composition.expandedActivity?.id)
         .animation(IslandMotion.shape, value: measuredPanelHeight)
-        .onChange(of: composition.structureKey) { _, _ in
+        .onChange(of: mode) { old, new in
+            // The metaball is for the silhouette changing SHAPE — growing off
+            // the notch, splitting, merging. Keyed to mode rather than
+            // structureKey so a transient seizing primary (a volume tap during
+            // music) no longer fires blur for what is really a content swap,
+            // and the expand morph is left to its spring.
+            guard old != .expanded, new != .expanded else { return }
             goo.pulse()
         }
         .onChange(of: footprint) { _, new in
@@ -214,7 +228,13 @@ public struct IslandRootView: View {
                         style: style(for: activity),
                         onSelect: { store.focusedActivityID = $0 },
                         onAction: { perform($0) },
-                        onDismiss: { collapse() }
+                        onDismiss: { collapse() },
+                        onOpen: {
+                            if let url = activity.openURL {
+                                open(url)
+                                collapse()
+                            }
+                        }
                     )
                     // Identity keyed to the activity, so paging between
                     // siblings is a real swap rather than an in-place teleport.
@@ -231,11 +251,13 @@ public struct IslandRootView: View {
     /// shape never crops live text.
     private static var panelTransition: some Transition {
         AsymmetricTransition(
+            // A whisker behind the shape, not a beat — the original 80ms
+            // stagger read as the panel arriving in two pieces.
             insertion: BlurReplaceTransition(configuration: .downUp)
                 .combined(with: OffsetTransition(CGSize(width: 0, height: -10)))
-                .animation(IslandMotion.content.delay(0.08)),
+                .animation(IslandMotion.content.delay(0.03)),
             removal: BlurReplaceTransition(configuration: .downUp)
-                .animation(.smooth(duration: 0.18))
+                .animation(.smooth(duration: 0.14))
         )
     }
 
@@ -276,30 +298,42 @@ public struct IslandRootView: View {
 
     // MARK: Interaction
 
-    private func handleHover(_ hovering: Bool) {
-        isHovering = hovering
-        hoverTask?.cancel()
+    /// How far the pointer may drift before it no longer counts as resting.
+    private static let dwellSlack: CGFloat = 8
 
-        guard hovering else {
-            withAnimation(.smooth(duration: 0.25)) { hoverSwell = 1 }
-            // Leaving closes, after a beat, so a cursor clipping the corner on
-            // its way somewhere else doesn't slam the panel shut.
-            hoverTask = Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(260))
-                guard !Task.isCancelled, !isHovering else { return }
-                collapse()
-            }
-            return
-        }
+    /// True when the island's screen has no menu bar — a full-screen app.
+    ///
+    /// Checked on demand at hover time rather than observed: no polling, no
+    /// plumbing, and worst case (letterboxed full screen reporting oddly) the
+    /// guard simply doesn't engage. Users who auto-hide the menu bar
+    /// permanently lose hover-expand and keep click-to-expand — a fair trade
+    /// for never opening a panel over a film.
+    private static var hostScreenIsFullScreen: Bool {
+        guard let screen = NSScreen.islandHost else { return false }
+        return screen.frame.maxY - screen.visibleFrame.maxY < 1
+    }
 
-        guard settings.expandOnHover else { return }
+    /// The dwell only runs while the pointer is RESTING. A pointer in transit
+    /// — heading for the menu bar, a tab, a window control — keeps moving, so
+    /// its timer keeps restarting and nothing ever opens in its path. That,
+    /// not the delay value, is what keeps the island out of the way.
+    private func handleHoverMove(_ location: CGPoint) {
+        isHovering = true
+        guard settings.expandOnHover, !store.isExpanded else { return }
         guard !composition.isIdle, composition.primary?.isExpandable == true else { return }
-        // Acknowledge intent before acting on it: a 2% swell says "I noticed"
-        // during the dwell. Gated to delays long enough that it can't read as
-        // jitter when expansion is effectively instant.
-        if !store.isExpanded, settings.hoverDelay >= 150 {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.75)) { hoverSwell = 1.02 }
+        // Full screen: shoving the pointer to the top edge is the "reveal the
+        // menu bar" gesture, and it rests there — exactly a dwell. Opening a
+        // panel over someone's movie on that gesture is the definition of
+        // being in the way. (Clicking the island still expands it.)
+        guard !Self.hostScreenIsFullScreen else { return }
+
+        if let anchor = dwellAnchor,
+           hypot(location.x - anchor.x, location.y - anchor.y) <= Self.dwellSlack {
+            return // Still resting; let the running timer finish.
         }
+
+        dwellAnchor = location
+        hoverTask?.cancel()
         hoverTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(Int(settings.hoverDelay)))
             guard !Task.isCancelled, isHovering else { return }
@@ -307,16 +341,27 @@ public struct IslandRootView: View {
         }
     }
 
+    private func handleHoverExit() {
+        isHovering = false
+        dwellAnchor = nil
+        hoverTask?.cancel()
+        guard store.isExpanded else { return }
+        // Leaving closes, after a beat, so a cursor clipping the corner on
+        // its way somewhere else doesn't slam the panel shut.
+        hoverTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled, !isHovering else { return }
+            collapse()
+        }
+    }
+
     private func handleTap() {
         if store.isExpanded {
-            // A click on the expanded panel's chrome opens the owning app, the
-            // way tapping Apple's island does.
-            if let url = composition.expandedActivity?.openURL {
-                open(url)
-                collapse()
-            } else {
-                collapse()
-            }
+            // A background tap on the open panel just puts it away. Opening
+            // the owning app lives on the header row — an accidental
+            // hover-expansion used to punish the reflex "get out of my way"
+            // click with an app switch.
+            collapse()
             return
         }
         if composition.primary?.isExpandable == true {
@@ -330,8 +375,10 @@ public struct IslandRootView: View {
         guard !store.isExpanded else { return }
         withAnimation(IslandMotion.expand) {
             store.isExpanded = true
-            // The swell folds into the panel's growth instead of popping back.
-            hoverSwell = 1
+            // Pin what the user opened. Without this the expanded slot tracks
+            // primary, and a volume tap mid-read teleports the panel's content
+            // to the HUD and back.
+            store.focusedActivityID = composition.primary?.id
         }
     }
 

@@ -21,7 +21,7 @@ final class IsletSettingsTests: XCTestCase {
     func testDefaults() {
         let settings = IsletSettings(defaults: defaults)
         XCTAssertTrue(settings.expandOnHover)
-        XCTAssertEqual(settings.hoverDelay, 220)
+        XCTAssertEqual(settings.hoverDelay, 400)
         XCTAssertTrue(settings.animateArrivals)
         XCTAssertTrue(settings.showOnNotchlessDisplays)
         XCTAssertFalse(settings.weatherAlerts)
@@ -84,7 +84,7 @@ final class IsletSettingsTests: XCTestCase {
 
         settings.resetToDefaults()
 
-        XCTAssertEqual(settings.hoverDelay, 220)
+        XCTAssertEqual(settings.hoverDelay, 400)
         XCTAssertEqual(settings.weatherMode, .onDemand)
         XCTAssertTrue(settings.isModuleEnabled("system.media"))
     }

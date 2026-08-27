@@ -191,10 +191,58 @@ The Glass theme's surface is real Liquid Glass on macOS 26+, behind
 
 Motion rules that came out of the same pass:
 
-- Open and close are different springs (`expand` 0.50/0.76 with overshoot,
-  `collapse` 0.38/0.92 nearly dead). The goo pulse is asymmetric — fast rise
-  (0.16 easeOut), slow settle (0.39 easeInOut) — and the rim *fades* at the
-  goo threshold instead of blinking.
+- Open and close are different springs (`expand` 0.40/0.80 with a breath of
+  overshoot, `collapse` 0.30/0.95 nearly dead). The first expand tuning
+  (0.50 + an 80ms content stagger) measured smooth but FELT sluggish on real
+  hands — "clunky" was tempo, not framerate; a YDIF frame-difference series
+  over a 41fps capture showed zero dropped frames through the spring. The goo
+  pulse is asymmetric — fast rise (0.16 easeOut), settle (0.30 easeInOut) —
+  and the rim *fades* at the goo threshold instead of blinking.
+- **Hover-to-expand requires a RESTING pointer**, not a present one: the
+  dwell timer restarts whenever the pointer strays more than 8pt from its
+  anchor (`onContinuousHover`), so a pointer in transit to the menu bar never
+  opens a panel in its own path. The 2% hover swell was removed for the same
+  reason — the island acknowledging every fly-by read as being in the way.
+  Transients no longer bounce (`lastArrivalID` is ongoing-only): a volume HUD
+  should appear, not celebrate.
+
+## Staying out of the way
+
+An adversarial audit of interruption paths drove a set of rules that are
+easy to regress — treat these as invariants:
+
+- **Clicks get the EXACT footprint; slop is for hover only.** `hitTest`
+  checks `NSApp.currentEvent` — button events use 0pt slop and no reach
+  below the island's bottom edge, and an **idle island is fully
+  click-transparent**. Before this, a permanent ~244pt-wide strip below the
+  menu bar swallowed clicks in every app, and menu bar items within ~74pt of
+  the notch edge were island taps.
+- **Drags are gated by location** (`dragIsOverIsland`): AppKit routes drags
+  by view geometry, not `hitTest`, so ungated callbacks made the whole
+  invisible 648×510 panel a drop target — releasing a file over your own
+  document near screen-top fed it to the shelf. The shelf hint also waits
+  200ms so a drag merely passing over the notch doesn't erupt.
+- **A background tap on the open panel only collapses it.** Opening the
+  owning app lives on the header row alone — an accidental hover-expansion
+  must never turn the reflex "go away" click into an app switch.
+- **Expand pins `focusedActivityID`** so a transient seizing primary can't
+  teleport the open panel's content to a volume HUD and back.
+- **Goo pulses on mode changes only** (idle/compact/split shape morphs) —
+  not on `structureKey`, which fires for content swaps.
+- **HUD dwells are 2.0s** (longer than tap–think–tap cadence, so presses
+  merge into one episode); the brightness delta threshold is 0.012 so
+  ambient auto-brightness ramps never raise the HUD (keyboard steps are
+  0.0156+).
+- **Hover-expand stands down in full screen** (`hostScreenIsFullScreen`,
+  checked on demand — no polling): the shove-to-top "reveal menu bar"
+  gesture is a resting pointer in the hit zone, and a panel over a movie is
+  the definition of in the way. Click-to-expand still works.
+- The arrival bounce is suppressed while the panel is open, and Esc-to-close
+  is deliberately NOT implemented: the panel can't become key, and a global
+  key monitor would need Accessibility, which the permission posture
+  forbids. Outside-click and hover-exit cover dismissal.
+- `hoverDelay` default is 400ms; values stored at the old 220 default are
+  migrated on load (220 was never a user's choice).
 - `contentTransition(.numericText())` does nothing without an animated
   transaction: TimelineView ticks carry none, so every rolling number needs
   `.animation(_, value: label)` next to it. This bug existed on every readout.

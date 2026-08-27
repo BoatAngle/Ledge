@@ -67,7 +67,12 @@ public final class BrightnessProvider: SystemProvider {
         guard isPrimed, let previous = lastValue else { return }
         // Ignore sub-percent drift so ambient auto-brightness doesn't spam the
         // island while you sit still.
-        guard abs(value - previous) > 0.008 else { return }
+        // Keyboard steps are 1/16 (0.0625) or 1/64 (0.0156); ambient
+        // auto-brightness ramps move far finer per poll. 0.012 catches every
+        // key press including the fine Opt+Shift step and ignores the room
+        // getting brighter — the system's own HUD never shows for ambient
+        // changes, and neither should the island.
+        guard abs(value - previous) > 0.012 else { return }
 
         let percent = Int((value * 100).rounded())
         store.flash(
@@ -81,7 +86,7 @@ public final class BrightnessProvider: SystemProvider {
                 tint: IsletColor.yellow,
                 progress: ActivityProgress(fraction: Double(value))
             ),
-            dwell: 1.3
+            dwell: 2.0
         )
     }
 }

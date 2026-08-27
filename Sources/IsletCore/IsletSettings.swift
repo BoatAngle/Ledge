@@ -148,7 +148,12 @@ public final class IsletSettings {
         self.defaults = defaults
 
         expandOnHover = defaults.object(forKey: Keys.expandOnHover) as? Bool ?? true
-        hoverDelay = defaults.object(forKey: Keys.hoverDelay) as? Double ?? 220
+        // 400, up from 220: with the stationary-pointer gate the delay is the
+        // second line of defence, and 220 sat inside the natural correction
+        // pause when aiming at menu bar targets near the notch. Values stored
+        // at the old default migrate — 220 was never a choice anyone made.
+        let storedDelay = defaults.object(forKey: Keys.hoverDelay) as? Double
+        hoverDelay = (storedDelay == nil || storedDelay == 220) ? 400 : storedDelay!
         showOnNotchlessDisplays = defaults.object(forKey: Keys.showOnNotchless) as? Bool ?? true
         animateArrivals = defaults.object(forKey: Keys.animateArrivals) as? Bool ?? true
         theme = (defaults.string(forKey: Keys.theme)
@@ -228,7 +233,7 @@ public final class IsletSettings {
             defaults.removeObject(forKey: key)
         }
         expandOnHover = true
-        hoverDelay = 220
+        hoverDelay = 400
         showOnNotchlessDisplays = true
         animateArrivals = true
         theme = .glass

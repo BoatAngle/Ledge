@@ -50,15 +50,29 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     /// The shelf that receives files dropped on the island.
     weak var shelf: DropShelf?
 
+    /// Whether the island currently shows nothing. Supplied by the
+    /// controller; an idle island must be completely click-transparent.
+    var isIdle: () -> Bool = { true }
+
     /// Extra slack around the island so the cursor registers a hover just
-    /// before it touches the edge — and, when idle, so the notch is a large
-    /// enough target to drag a file onto.
-    private let slop: CGFloat = 16
+    /// before it touches the edge. HOVER ONLY — clicks are tested against the
+    /// exact footprint, because every point of click slack is a menu bar item
+    /// or a toolbar button near the notch that stops working.
+    private let hoverSlop: CGFloat = 10
+    /// Drags get more forgiveness than hovers: a file en route to the notch
+    /// is a coarser gesture than a pointer.
+    private let dragSlop: CGFloat = 20
 
     // MARK: Drag destination
 
+    // Every callback is gated on the drag's LOCATION. AppKit routes drags by
+    // view geometry, not through the hitTest override below — ungated, the
+    // whole invisible 648×510 panel was a drop target, and releasing a file
+    // over your own document near the top of the screen fed it to the shelf
+    // instead of the app you were aiming at.
+
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard !urls(from: sender).isEmpty else { return [] }
+        guard !urls(from: sender).isEmpty, dragIsOverIsland(sender) else { return [] }
         shelf?.dragEntered()
         // `.copy` because the shelf only ever references files — it never
         // moves or deletes what you drop on it.
@@ -67,6 +81,11 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
         guard !urls(from: sender).isEmpty else { return [] }
+        guard dragIsOverIsland(sender) else {
+            shelf?.dragExited()
+            return []
+        }
+        shelf?.dragEntered()
         shelf?.dragUpdated()
         return .copy
     }
@@ -76,14 +95,22 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        !urls(from: sender).isEmpty
+        !urls(from: sender).isEmpty && dragIsOverIsland(sender)
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         let urls = urls(from: sender)
-        guard !urls.isEmpty else { return false }
+        guard !urls.isEmpty, dragIsOverIsland(sender) else { return false }
         shelf?.accept(urls)
         return true
+    }
+
+    private func dragIsOverIsland(_ sender: any NSDraggingInfo) -> Bool {
+        // When idle the visible target is just the notch, so the slop is
+        // fatter — a drop target has to be hittable to be discoverable.
+        let slack = isIdle() ? 24 : dragSlop
+        return interactiveRect(slop: slack, belowBottom: slack)
+            .contains(convert(sender.draggingLocation, from: nil))
     }
 
     private func urls(from sender: any NSDraggingInfo) -> [URL] {
@@ -94,16 +121,44 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        let active = footprint.width > 0 && footprint.height > 0 ? footprint : fallbackFootprint
-        guard active.width > 0, active.height > 0 else { return nil }
-        let rect = CGRect(
-            x: (bounds.width - active.width) / 2 - slop,
-            y: bounds.height - active.height - slop,
-            width: active.width + slop * 2,
-            height: active.height + slop * 2
-        )
-        guard rect.contains(point) else { return nil }
+        let event = NSApp.currentEvent
+        let isButtonEvent: Bool
+        switch event?.type {
+        case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp,
+             .otherMouseDown, .otherMouseUp:
+            isButtonEvent = true
+        default:
+            isButtonEvent = false
+        }
+
+        if isButtonEvent {
+            // An idle island has no tap behavior, so it must not eat the
+            // click either — the strip below the menu bar belongs to
+            // whatever app is open, not to an invisible pill.
+            guard !isIdle() else { return nil }
+            // Clicks get the EXACT footprint: no slop, no reach below the
+            // bottom edge. Slop on clicks turned menu bar items and toolbar
+            // buttons near the notch into island taps.
+            guard interactiveRect(slop: 0, belowBottom: 0).contains(point) else { return nil }
+        } else {
+            guard interactiveRect(slop: hoverSlop, belowBottom: hoverSlop).contains(point) else {
+                return nil
+            }
+        }
         return super.hitTest(point)
+    }
+
+    /// The island's current rectangle in view coordinates, inflated by `slop`
+    /// on the sides and top, and by `belowBottom` past its lower edge.
+    private func interactiveRect(slop: CGFloat, belowBottom: CGFloat) -> CGRect {
+        let active = footprint.width > 0 && footprint.height > 0 ? footprint : fallbackFootprint
+        guard active.width > 0, active.height > 0 else { return .zero }
+        return CGRect(
+            x: (bounds.width - active.width) / 2 - slop,
+            y: bounds.height - active.height - belowBottom,
+            width: active.width + slop * 2,
+            height: active.height + belowBottom + slop
+        )
     }
 }
 
@@ -236,6 +291,7 @@ public final class IslandWindowController {
             view.autoresizingMask = [.width, .height]
             view.shelf = shelf
             view.fallbackFootprint = metrics.notchSize
+            view.isIdle = { [weak store] in store?.composition.isIdle ?? true }
             view.registerForDraggedTypes([.fileURL])
             panel.contentView = view
             hostingView = view

@@ -67,7 +67,12 @@ public final class ActivityStore {
         }
 
         activities[incoming.id] = incoming
-        if isNew { lastArrivalID = incoming.id }
+        // Only ongoing work earns the attention bounce. A transient HUD —
+        // volume, brightness — should appear, not celebrate: each spaced key
+        // press re-creates its expired activity as "new", and bouncing the
+        // island for every one of those reads as the island demanding
+        // attention it wasn't owed.
+        if isNew, incoming.kind == .ongoing { lastArrivalID = incoming.id }
         recompose()
         return incoming
     }
