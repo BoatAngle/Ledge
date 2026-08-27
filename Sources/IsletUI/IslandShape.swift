@@ -92,6 +92,13 @@ public struct IslandSilhouette: View {
     /// previews want a deterministic surface, not a live window onto the form
     /// behind them.
     public var prefersLiveGlass: Bool
+    /// Whether the translucent treatment is active right now.
+    ///
+    /// Glass is the PANEL's material. The compact island is hardware-black —
+    /// a translucent lip below the camera strip read as a strange lit bar
+    /// bolted under the notch, splitting one object into two. The renderer
+    /// passes `mode == .expanded`; the glass fades in as the panel grows.
+    public var showsGlass: Bool
 
     /// Slack around the canvas so the blur has somewhere to bleed.
     private let pad: CGFloat = 30
@@ -104,7 +111,8 @@ public struct IslandSilhouette: View {
         goo: CGFloat = 0,
         hasDepth: Bool = true,
         opaqueTopHeight: CGFloat = 0,
-        prefersLiveGlass: Bool = true
+        prefersLiveGlass: Bool = true,
+        showsGlass: Bool = true
     ) {
         self.bodySize = bodySize
         self.minimalFrame = minimalFrame
@@ -114,6 +122,7 @@ public struct IslandSilhouette: View {
         self.hasDepth = hasDepth
         self.opaqueTopHeight = opaqueTopHeight
         self.prefersLiveGlass = prefersLiveGlass
+        self.showsGlass = showsGlass
     }
 
     /// Total footprint including the fillet flare and, in `.split`, the
@@ -126,6 +135,12 @@ public struct IslandSilhouette: View {
 
     /// Width of the notch-shaped body including its fillet flare.
     private var bodyFootprintWidth: CGFloat { bodySize.width + topFillet * 2 }
+
+    /// The Glass theme's rim is tuned for the lit panel; on the closed black
+    /// pill it drops to a whisper.
+    private var rimStrength: Double {
+        theme.usesGlass && !showsGlass ? 0.35 : 1
+    }
 
     public var body: some View {
         ZStack(alignment: .topLeading) {
@@ -140,9 +155,12 @@ public struct IslandSilhouette: View {
             if hasDepth {
                 // Faded rather than removed mid-morph: a stroke tracing a
                 // stretching blob reads as an outline, but blinking at the
-                // goo threshold reads as a glitch.
+                // goo threshold reads as a glitch. Compact keeps only a
+                // whisper of the Glass theme's bright rim — a lit edge on a
+                // closed black pill outlines it like a bar instead of
+                // grounding it.
                 Group { rim }
-                    .opacity(goo <= 0.2 ? 1 : 0)
+                    .opacity(goo <= 0.2 ? rimStrength : 0)
                     .animation(.easeOut(duration: 0.15), value: goo <= 0.2)
             }
         }
@@ -153,6 +171,23 @@ public struct IslandSilhouette: View {
     @ViewBuilder
     private var surface: some View {
         if theme.usesGlass, hasDepth {
+            ZStack {
+                // Opaque base first: compact and split render as ONE black
+                // object. The glass stack above fades in with the panel, so
+                // opening pours the material in as the shape grows rather
+                // than snapping between two surfaces.
+                Rectangle().fill(theme.surfaceFill(liftsAtBottom: hasDepth))
+                glassStack
+                    .opacity(showsGlass ? 1 : 0)
+            }
+        } else {
+            Rectangle().fill(theme.surfaceFill(liftsAtBottom: hasDepth))
+        }
+    }
+
+    @ViewBuilder
+    private var glassStack: some View {
+        Group {
             ZStack {
                 // Real Liquid Glass where the system has it. The shape is
                 // deliberately a plain rect: the silhouette mask downstream is
@@ -199,8 +234,6 @@ public struct IslandSilhouette: View {
                 .frame(height: 0.75)
                 .offset(y: max(opaqueTopHeight, 1))
             }
-        } else {
-            Rectangle().fill(theme.surfaceFill(liftsAtBottom: hasDepth))
         }
     }
 

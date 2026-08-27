@@ -72,8 +72,8 @@ public enum IslandDesign {
         public var ambientOpacity: Double
 
         public static let resting = ShadowSpec(
-            contactRadius: 5, contactY: 2, contactOpacity: 0.34,
-            ambientRadius: 18, ambientY: 8, ambientOpacity: 0.22
+            contactRadius: 5, contactY: 2, contactOpacity: 0.30,
+            ambientRadius: 14, ambientY: 6, ambientOpacity: 0.16
         )
         public static let raised = ShadowSpec(
             contactRadius: 8, contactY: 3, contactOpacity: 0.42,

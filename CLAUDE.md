@@ -167,6 +167,14 @@ The Glass theme's surface is real Liquid Glass on macOS 26+, behind
 `if #available` with the material+scrim branch kept verbatim as the fallback
 (deployment target stays macOS 14). Decisions that took live experiments:
 
+- **Glass is the PANEL's material; the closed pill is hardware-black.**
+  `IslandSilhouette.showsGlass` (the renderer passes `mode == .expanded`)
+  fades the glass stack in as the panel grows. With glass active in compact,
+  the translucent 6pt lip below the true-black camera strip — plus the
+  specular line and the 0.30 rim — read as a strange lit bar bolted under
+  the notch ("quite disturbing", verbatim). Compact also drops the rim to
+  0.35× for the Glass theme. Settings previews keep `showsGlass: true` so
+  the Glass theme card still shows its character.
 - **`.clear`, never `.regular`.** Regular glass has an adaptive legibility
   lift that fights a dark tint — over a white desktop it plateaus at mid-grey
   no matter how much black you pour in. `.clear` is the media-context glass:

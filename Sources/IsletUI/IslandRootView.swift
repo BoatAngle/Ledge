@@ -135,7 +135,8 @@ public struct IslandRootView: View {
                     * theme.bottomRadiusScale,
                 goo: goo.radius,
                 hasDepth: mode != .idle,
-                opaqueTopHeight: metrics.notchSize.height
+                opaqueTopHeight: metrics.notchSize.height,
+                showsGlass: mode == .expanded
             )
             .islandShadow(shadowSpec)
             .offset(x: leadingReserve)
