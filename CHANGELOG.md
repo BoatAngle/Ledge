@@ -35,10 +35,10 @@ The "as if Apple designed it" release.
   color/size/position with a live island preview, and real keyboard menus.
 
 ### API
-- `islet expand` / `collapse`, settings deep links, and friendlier JSON:
+- `ledge expand` / `collapse`, settings deep links, and friendlier JSON:
   activities need only a title, actions only an id and a title.
 
 ## 0.1.0
 
 First build: the island engine, eleven system modules, the drop shelf,
-and the `islet` CLI / socket API / Shortcuts actions.
+and the `ledge` CLI / socket API / Shortcuts actions.

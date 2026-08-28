@@ -1,4 +1,4 @@
-# Islet — working notes
+# Ledge — working notes
 
 Open-source Dynamic Island for macOS. Read this before changing anything; it
 records the decisions that aren't obvious from the code and the traps that cost
@@ -7,7 +7,7 @@ real time.
 ## Build and run
 
 ```bash
-make run     # compile + assemble Islet.app + relaunch
+make run     # compile + assemble Ledge.app + relaunch
 make test    # 84+ tests across Core, UI, and Modules
 make app     # bundle only
 make stop    # pkill
@@ -18,16 +18,16 @@ make stop    # pkill
 
 ## Traps that already bit
 
-**Case-insensitive filesystem, twice.** macOS treats `Islet` and `islet` as the
+**Case-insensitive filesystem, twice.** macOS treats `Ledge` and `ledge` as the
 same name.
-1. A SwiftPM product named `islet` collided with the `Islet` app target's build
+1. A SwiftPM product named `ledge` collided with the `Ledge` app target's build
    directory and silently compiled the app target's sources into the CLI. The
-   product is therefore `islet-cli`.
-2. `cp islet-cli Islet.app/Contents/MacOS/islet` **overwrote the app binary**,
+   product is therefore `ledge-cli`.
+2. `cp ledge-cli Ledge.app/Contents/MacOS/ledge` **overwrote the app binary**,
    producing an "app" that was really the CLI and segfaulted on launch. The CLI
-   lives in `Contents/Helpers/islet`. Do not move it back.
+   lives in `Contents/Helpers/ledge`. Do not move it back.
 
-**Top-level globals initialise in statement order.** `let isletVersion` sat at
+**Top-level globals initialise in statement order.** `let ledgeVersion` sat at
 the bottom of the CLI's `main.swift` and `printUsage()` read it from above —
 uninitialised memory, segfault. It lives in `Arguments.swift` now. Never declare
 a global below the code that uses it in a `main.swift`.
@@ -48,7 +48,7 @@ which slot. Views read `store.composition` and render it. If you find yourself
 adding display logic to a view that depends on *which* activities exist, it
 belongs in the store.
 
-`IsletCore` must not import AppKit or SwiftUI — the CLI links it.
+`LedgeCore` must not import AppKit or SwiftUI — the CLI links it.
 
 ## Scheduling semantics
 
@@ -73,7 +73,7 @@ belongs in the store.
 
 ## Wire protocol
 
-Newline-delimited JSON over `~/Library/Application Support/Islet/islet.sock`
+Newline-delimited JSON over `~/Library/Application Support/Ledge/ledge.sock`
 (0600, in a 0700 directory). One request per connection.
 
 Dates use ISO 8601 **with fractional seconds** via `Date.ISO8601FormatStyle`.
@@ -90,7 +90,7 @@ Deliberate, and worth preserving:
 - Caps Lock polls `NSEvent.modifierFlags`; a global key monitor would need
   Accessibility.
 - Privacy indicators query CoreAudio/CoreMediaIO for whether *someone else* is
-  using the devices. Islet never opens the camera or mic.
+  using the devices. Ledge never opens the camera or mic.
 - Exactly four modules prompt, each independently declinable: Now Playing
   (Automation), Calendar (read-only), Downloads (folder access), and Weather
   (Location — only when first used).
@@ -132,7 +132,7 @@ stats the folder.
 **The socket unlink race.** On quit the server used to `unlink` the socket
 unconditionally. Relaunching overlaps the two processes, so the outgoing app
 would delete the *incoming* one's socket, leaving it listening on an unreachable
-inode: alive, but every client reports "Islet isn't running". `stop()` now
+inode: alive, but every client reports "Ledge isn't running". `stop()` now
 compares the inode before unlinking.
 
 **The footprint race.** `PassthroughHostingView.hitTest` rejects everything when
@@ -153,7 +153,7 @@ CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
 ```
 
 Dragging files *onto* the notch can't be scripted safely — it needs a real
-Finder drag. `islet shelf <files>` exercises the same shelf code and is tested.
+Finder drag. `ledge shelf <files>` exercises the same shelf code and is tested.
 
 ## Visual system
 
@@ -292,13 +292,13 @@ JSON in `UserDefaults` under `appearance.<id>`. Three things to know:
 Changing appearance has to reach two places: the renderer reads
 `settings.appearanceRevision` so `@Observable` registers a dependency it
 otherwise couldn't (the data lives in `UserDefaults`), and
-`.isletAppearanceChanged` triggers `store.refresh()` so the scheduler re-sorts —
+`.ledgeAppearanceChanged` triggers `store.refresh()` so the scheduler re-sorts —
 ordering is only recomputed when activities change, so without it the position
 slider would do nothing until the next event.
 
 ## The glyph family
 
-`IsletGlyph` is Islet's own icon set — one 24pt grid, round caps, weight scaled
+`LedgeGlyph` is Ledge's own icon set — one 24pt grid, round caps, weight scaled
 by the theme. Two weights: `.outline` and `.solid`.
 
 A solid mark is **not the outline filled**. Filling a battery outline gives a
@@ -320,7 +320,7 @@ a line has no area; and the solid battery's charge level was drawn into the fill
 and then erased by a knockout covering the whole interior. There are now
 regression tests for both, but the *sheet* is what found them.
 
-Maintain the set by looking at it: `Islet.app/Contents/MacOS/Islet --glyph-sheet
+Maintain the set by looking at it: `Ledge.app/Contents/MacOS/Ledge --glyph-sheet
 out.png` renders every mark in both weights, side by side. That comparison is
 the point — it's how you see whether a solid mark still reads as the same idea
 as its outline.
@@ -352,11 +352,11 @@ Rules that keep it behaving like an object rather than a screenshot:
   block. Easy to miss because a one-line footer looks nearly right.
 - The design boundary, stated at the top of `SettingsView.swift`: window
   chrome speaks macOS (SF Symbols, standard controls); anything depicting
-  island content speaks Islet (glyph chips, island previews).
+  island content speaks Ledge (glyph chips, island previews).
 - The customization sheet pins its island preview *outside* the scrolling
   Form, so the thing being tuned never scrolls away.
 
-`islet settings --tab <name>` and `--customize <module-id>` are real features
+`ledge settings --tab <name>` and `--customize <module-id>` are real features
 and also the only practical way to screenshot these surfaces. A useful side
 effect: `--customize` with an unknown id resolves `editing` to nil, which
 *closes* an open sheet — the reliable way to dismiss it from a script, since

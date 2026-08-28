@@ -5,17 +5,17 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>Islet</string>
+	<string>Ledge</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.islet.Islet</string>
+	<string>dev.ledge.Ledge</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Islet</string>
+	<string>Ledge</string>
 	<key>CFBundleDisplayName</key>
-	<string>Islet</string>
+	<string>Ledge</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -30,17 +30,17 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<!-- Shown in the permission prompt the first time the media module reads
-	     what's playing. Music and Spotify are the only apps Islet talks to. -->
+	     what's playing. Music and Spotify are the only apps Ledge talks to. -->
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Islet reads the current track from Music and Spotify so it can show what's playing in the notch. It never sends this anywhere.</string>
+	<string>Ledge reads the current track from Music and Spotify so it can show what's playing in the notch. It never sends this anywhere.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Islet shows your next meeting in the notch as it approaches, with a button to join. It only reads events; it never changes or shares them.</string>
+	<string>Ledge shows your next meeting in the notch as it approaches, with a button to join. It only reads events; it never changes or shares them.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Islet shows your next meeting in the notch as it approaches, with a button to join. It only reads events; it never changes or shares them.</string>
+	<string>Ledge shows your next meeting in the notch as it approaches, with a button to join. It only reads events; it never changes or shares them.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
-	<string>Islet watches your Downloads folder for in-progress downloads so it can show their progress in the notch.</string>
+	<string>Ledge watches your Downloads folder for in-progress downloads so it can show their progress in the notch.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Islet uses your location only to look up local weather. The coordinates go to Open-Meteo and nowhere else, and you can set a location manually in Settings instead.</string>
+	<string>Ledge uses your location only to look up local weather. The coordinates go to Open-Meteo and nowhere else, and you can set a location manually in Settings instead.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT licensed. Copyright © 2026 Harrison Braun.</string>
 </dict>

@@ -5,5 +5,5 @@ build/
 dist/
 *.xcodeproj
 *.xcworkspace
-Islet.app/
+Ledge.app/
 .build-stale*/

@@ -1,17 +1,17 @@
-# Islet
+# Ledge
 
 A Dynamic Island for macOS — and a live-activity API for everything else on your Mac.
 
 ![The island — the closed pill over the desktop, and the expanded Glass panel](docs/hero.png)
 
-Islet turns the MacBook notch into the thing Apple built for the iPhone: a small
+Ledge turns the MacBook notch into the thing Apple built for the iPhone: a small
 black shape that grows when something happens, splits when two things happen at
 once, and drops down into a panel when you want the detail. It ships the system
 modules you'd expect, and then goes one step further — **anything on your Mac can
 post its own activity to the notch.**
 
 ```bash
-islet run --title "Build" -- swift build
+ledge run --title "Build" -- swift build
 ```
 
 MIT licensed. No account, no license key, no subscription, no telemetry.
@@ -62,7 +62,7 @@ the same dimensions.
 
 Everything stands down while the machine is locked or the display is asleep. A
 settings window covers all of it — General, Modules, Weather, About — reachable
-from the menu bar, `⌘,`, or `islet settings`.
+from the menu bar, `⌘,`, or `ledge settings`.
 
 ## Making it yours
 
@@ -71,7 +71,7 @@ island preview** built from the real silhouette and the real compact views — s
 what you tune is genuinely what you get.
 
 ```bash
-islet settings --customize system.media
+ledge settings --customize system.media
 ```
 
 - **Colour** — the system palette or any custom colour.
@@ -93,34 +93,34 @@ bezel. One toggle in Settings changes that.
 
 ## The part nothing else has
 
-Every other notch app shows you *its* features. Islet lets anything on your Mac
+Every other notch app shows you *its* features. Ledge lets anything on your Mac
 show *yours*.
 
 ```bash
 # Wrap any command. Shows progress while it runs, then success or failure.
-islet run --title "Deploying" --tint blue -- ./deploy.sh
+ledge run --title "Deploying" --tint blue -- ./deploy.sh
 
 # Or drive it manually.
-id=$(islet start --title "Uploading" --indeterminate --tint blue)
-islet update $id --progress 60%
-islet end $id
+id=$(ledge start --title "Uploading" --indeterminate --tint blue)
+ledge update $id --progress 60%
+ledge end $id
 
 # One-shot notifications.
-islet flash --title "Tests passed" --icon symbol:checkmark.seal.fill --tint green
+ledge flash --title "Tests passed" --icon symbol:checkmark.seal.fill --tint green
 
 # A real timer that chimes at zero.
-islet timer 25m --label Pomodoro
+ledge timer 25m --label Pomodoro
 
 # Park build output on the island, then drag it straight into a message.
-islet shelf out/*.png
+ledge shelf out/*.png
 ```
 
 Long `ffmpeg` renders, CI watches, `brew upgrade`, a training run, a deploy —
 anything that takes long enough that you'd otherwise go check on it.
 
 It's a Unix domain socket speaking newline-delimited JSON, at
-`~/Library/Application Support/Islet/islet.sock`, `chmod 0600`. Nothing on the
-network can reach it. `islet` is a thin client over it; you can just as easily
+`~/Library/Application Support/Ledge/ledge.sock`, `chmod 0600`. Nothing on the
+network can reach it. `ledge` is a thin client over it; you can just as easily
 talk to it from Python, Node, or `nc`.
 
 Shortcuts and Siri get native actions too: **Show Activity in Notch**, **Remove
@@ -132,11 +132,11 @@ Weather in Notch**.
 Requires macOS 14 Sonoma or newer, and Xcode's toolchain to build.
 
 ```bash
-git clone https://github.com/BoatAngle/Islet.git && cd Islet
+git clone https://github.com/BoatAngle/Ledge.git && cd Ledge
 make run
 ```
 
-That compiles, assembles `Islet.app`, and launches it. To put the CLI on your
+That compiles, assembles `Ledge.app`, and launches it. To put the CLI on your
 PATH:
 
 ```bash
@@ -149,21 +149,21 @@ about to `sudo`.
 ## CLI reference
 
 ```
-islet start        Post an ongoing activity. Prints its id.
-islet flash        Post a transient activity that retires itself.
-islet update <id>  Change an existing activity's content.
-islet end <id>     Remove an activity.
-islet end-all      Remove everything (optionally --source <name>).
-islet list         Show what's currently on the island.
-islet run -- <cmd> Run a command, showing progress; reports success or failure.
-islet timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
-islet shelf [files] Park files on the island. No arguments clears it.
-islet weather      Show current conditions on the island.
-islet expand [id]  Open the panel, optionally on a specific activity.
-islet collapse     Close the panel.
-islet settings     Open Settings. --tab general|modules|weather|about,
+ledge start        Post an ongoing activity. Prints its id.
+ledge flash        Post a transient activity that retires itself.
+ledge update <id>  Change an existing activity's content.
+ledge end <id>     Remove an activity.
+ledge end-all      Remove everything (optionally --source <name>).
+ledge list         Show what's currently on the island.
+ledge run -- <cmd> Run a command, showing progress; reports success or failure.
+ledge timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
+ledge shelf [files] Park files on the island. No arguments clears it.
+ledge weather      Show current conditions on the island.
+ledge expand [id]  Open the panel, optionally on a specific activity.
+ledge collapse     Close the panel.
+ledge settings     Open Settings. --tab general|modules|weather|about,
                    --customize <module-id>
-islet ping         Check that Islet.app is running.
+ledge ping         Check that Ledge.app is running.
 ```
 
 Content flags: `--title --subtitle --body --trailing --icon --tint --progress
@@ -177,7 +177,7 @@ Behaviour flags: `--id --source --priority --dwell --stdin --json --quiet`
 Full JSON payloads work too, for anything the flags don't cover:
 
 ```bash
-echo '{"title":"Custom","progress":{"fraction":0.5}}' | islet start --stdin
+echo '{"title":"Custom","progress":{"fraction":0.5}}' | ledge start --stdin
 ```
 
 Only `title` is required — you never have to write empty arrays, and action
@@ -209,23 +209,23 @@ expanded panel, the glyphs, the type, and the accents.
 
 ## Icons
 
-Islet draws its own — 39 marks on a single 24pt grid, in outline and solid
+Ledge draws its own — 39 marks on a single 24pt grid, in outline and solid
 weights, with the weight chosen by the theme. SF Symbols are excellent, but they
 carry Apple's optical conventions; at 20pt on black they read as system icons
 borrowed onto someone else's surface.
 
 Modules and the CLI still speak SF Symbol names, mapped onto the family, so
-`islet start --icon symbol:bolt.fill` keeps working and anything unmapped falls
+`ledge start --icon symbol:bolt.fill` keeps working and anything unmapped falls
 back to Apple's glyph rather than failing.
 
 ## Architecture
 
 ```
-IsletCore      Model, scheduler, geometry, wire protocol. No AppKit, no SwiftUI.
-IsletUI        The island: window, shape, morph, presentations.
-IsletModules   The eleven system providers.
-Islet          The app: menu bar, socket server, App Intents.
-IsletCLI       The `islet` binary.
+LedgeCore      Model, scheduler, geometry, wire protocol. No AppKit, no SwiftUI.
+LedgeUI        The island: window, shape, morph, presentations.
+LedgeModules   The eleven system providers.
+Ledge          The app: menu bar, socket server, App Intents.
+LedgeCLI       The `ledge` binary.
 ```
 
 The rule that keeps it honest: **`ActivityStore` decides what is on screen, and
@@ -265,9 +265,9 @@ And three you will never see:
 - **Now Playing is Music and Spotify only.** The private MediaRemote framework that exposed system-wide Now Playing was locked behind an entitlement in macOS 15.4, so building on it would ship something that breaks. `MediaSource` is a protocol; an adapter can drop in when a supported path exists.
 - **Brightness uses a private framework** (`DisplayServices`), loaded by name at runtime. There is no public API to read display brightness. If it ever vanishes, the module reports unavailable and everything else keeps working.
 - **Ad-hoc signed.** Each rebuild changes the signature, so macOS may re-prompt for Automation access. Sign with a real identity to stop that.
-- **No lock-screen presence, and there won't be.** Other notch apps advertise it; the macOS login window runs in a separate session and third-party processes cannot draw into it. Islet instead notices the lock and suspends every poll until you're back.
+- **No lock-screen presence, and there won't be.** Other notch apps advertise it; the macOS login window runs in a separate session and third-party processes cannot draw into it. Ledge instead notices the lock and suspends every poll until you're back.
 - **Downloads show bytes received, not a percentage.** A partial file says how much has landed but never how much is coming. A progress bar built on a guess would be worse than an honest indeterminate one.
-- **Dragging *onto* the notch needs a real drag** — it could not be verified by script, only by hand. `islet shelf <files>` covers the same ground and is fully tested.
+- **Dragging *onto* the notch needs a real drag** — it could not be verified by script, only by hand. `ledge shelf <files>` covers the same ground and is fully tested.
 
 ## Licence
 
