@@ -99,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         if let appearanceObserver { NotificationCenter.default.removeObserver(appearanceObserver) }
         if let demoObserver { NotificationCenter.default.removeObserver(demoObserver) }
+        releaseWelcomeObserver()
         lockMonitor.stop()
         registry.stop()
         server.stop()
@@ -515,6 +516,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.store.focusedActivityID = Welcome.activityID
             self.store.isExpanded = true
         }
+
+        // Retire the observer when the welcome does, whether it was answered or
+        // simply left alone. A one-time introduction should not leave anything
+        // behind listening for the rest of the session.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Welcome.lifetime + 5))
+            self?.releaseWelcomeObserver()
+        }
+    }
+
+    private func releaseWelcomeObserver() {
+        guard let welcomeObserver else { return }
+        NotificationCenter.default.removeObserver(welcomeObserver)
+        self.welcomeObserver = nil
     }
 
     private func handleWelcomeAction(_ id: String) {
@@ -529,10 +544,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         default:
             return
         }
-        if let welcomeObserver {
-            NotificationCenter.default.removeObserver(welcomeObserver)
-            self.welcomeObserver = nil
-        }
+        releaseWelcomeObserver()
     }
 
     // MARK: - Updates
