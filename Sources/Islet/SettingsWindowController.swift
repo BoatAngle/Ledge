@@ -37,17 +37,20 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let modules: () -> [ModuleInfo]
     private let weatherProvider: () -> WeatherProvider?
     private let onToggleModule: (String, Bool) -> Void
+    private let onGrantPermission: (String) async -> Bool
 
     init(
         settings: IsletSettings,
         modules: @escaping () -> [ModuleInfo],
         weatherProvider: @escaping () -> WeatherProvider?,
-        onToggleModule: @escaping (String, Bool) -> Void
+        onToggleModule: @escaping (String, Bool) -> Void,
+        onGrantPermission: @escaping (String) async -> Bool
     ) {
         self.settings = settings
         self.modules = modules
         self.weatherProvider = weatherProvider
         self.onToggleModule = onToggleModule
+        self.onGrantPermission = onGrantPermission
     }
 
     func show(tab: SettingsTab = .general, customizing: String? = nil) {
@@ -108,7 +111,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 settings: settings,
                 session: session,
                 modules: modules,
-                onToggle: onToggleModule
+                onToggle: onToggleModule,
+                onGrant: onGrantPermission
             )
         case .weather:
             WeatherSettings(settings: settings, provider: weatherProvider)

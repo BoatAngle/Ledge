@@ -20,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         weatherProvider: { [weak self] in self?.weatherProvider },
         onToggleModule: { [weak self] identifier, enabled in
             self?.setModule(identifier, enabled: enabled)
+        },
+        onGrantPermission: { [weak self] identifier in
+            await self?.grantPermission(identifier) ?? false
         }
     )
     private var appearanceObserver: NSObjectProtocol?
@@ -316,9 +319,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 name: $0.displayName,
                 isAvailable: $0.isAvailable,
                 summary: $0.summary,
-                group: Self.activityModules.contains($0.identifier) ? .activities : .system
+                group: Self.activityModules.contains($0.identifier) ? .activities : .system,
+                permission: $0.permissionState
             )
         }
+    }
+
+    /// The Grant Access gesture from Settings — the explicit user intent the
+    /// one-and-done permission rule waits for.
+    private func grantPermission(_ identifier: String) async -> Bool {
+        guard let provider = allProviders.first(where: { $0.identifier == identifier })
+        else { return false }
+        let granted = await provider.requestPermission()
+        if granted {
+            settings.markPermissionVerified(identifier)
+        }
+        return granted
     }
 
     @objc private func openSettings() {

@@ -1,6 +1,20 @@
 import Foundation
 import IsletCore
 
+/// Where a module stands with the system permission it depends on.
+public enum ModulePermissionState: Equatable, Hashable, Sendable {
+    /// No system permission involved.
+    case notNeeded
+    /// The permission exists and hasn't been granted; a user gesture should
+    /// trigger the request. This is the one-and-done rule: a module may raise
+    /// its consent dialog on its own exactly once, ever — after that the
+    /// prompt appears only when the user explicitly asks, from Settings.
+    case needsRequest
+    case granted
+    /// Actively declined. The only road back is System Settings.
+    case denied
+}
+
 /// A source of system state that posts activities into the island.
 ///
 /// Every provider degrades quietly. If the API it needs isn't available — a
@@ -18,6 +32,12 @@ public protocol SystemProvider: AnyObject {
     /// One line explaining what it does, shown in Settings.
     var summary: String { get }
 
+    /// Where this module stands with its system permission, if it has one.
+    @MainActor var permissionState: ModulePermissionState { get }
+    /// Raise the consent dialog now, on the user's explicit gesture.
+    /// Returns whether access ended up granted.
+    @MainActor func requestPermission() async -> Bool
+
     func start(store: ActivityStore)
     func stop()
 
@@ -28,6 +48,8 @@ public protocol SystemProvider: AnyObject {
 }
 
 public extension SystemProvider {
+    @MainActor var permissionState: ModulePermissionState { .notNeeded }
+    @MainActor func requestPermission() async -> Bool { true }
     func suspend() {}
     func resume() {}
     var summary: String { "" }

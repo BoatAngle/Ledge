@@ -94,6 +94,16 @@ Deliberate, and worth preserving:
 - Exactly four modules prompt, each independently declinable: Now Playing
   (Automation), Calendar (read-only), Downloads (folder access), and Weather
   (Location — only when first used).
+- **The one-and-done rule.** A TCC dialog dismissed by a relaunch stays
+  `.notDetermined`, and re-requesting at every launch turns consent into a
+  nag (it did — the Calendar dialog haunted the desktop for weeks). A
+  prompting module may raise its dialog unsolicited exactly once, ever
+  (`permission.<id>.requested` in defaults); after that the prompt only
+  comes from the row's Grant Access link in Settings › Modules
+  (`SystemProvider.requestPermission()`). Downloads has no queryable TCC
+  status, so `.granted` there means "a folder open has verifiably worked"
+  (`permission.<id>.verified`). `resetToDefaults` deliberately does NOT
+  clear these flags — a settings reset must not resurrect the nag.
 - No Full Disk Access. Downloads are read from the partial files in
   `~/Downloads`, not from Safari's container.
 

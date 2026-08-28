@@ -195,6 +195,34 @@ public final class IsletSettings {
     /// stored property to notice.
     public private(set) var moduleRevision: UInt64 = 0
 
+    // MARK: Permission bookkeeping
+
+    /// Whether a module has ever raised its consent dialog on its own.
+    ///
+    /// The one-and-done rule: a TCC dialog dismissed by an app relaunch (or a
+    /// reboot, or plain inattention) leaves the system in `.notDetermined`,
+    /// and re-requesting at every launch turns consent into a nag. Each
+    /// prompting module asks once, ever; after that the dialog appears only
+    /// from an explicit Grant Access gesture in Settings.
+    public func hasAutoRequestedPermission(_ identifier: String) -> Bool {
+        defaults.bool(forKey: "permission.\(identifier).requested")
+    }
+
+    public func markPermissionAutoRequested(_ identifier: String) {
+        defaults.set(true, forKey: "permission.\(identifier).requested")
+    }
+
+    /// For permissions with no queryable status (the Downloads folder):
+    /// remembers that access has verifiably worked at least once.
+    public func hasVerifiedPermission(_ identifier: String) -> Bool {
+        defaults.bool(forKey: "permission.\(identifier).verified")
+    }
+
+    public func markPermissionVerified(_ identifier: String) {
+        defaults.set(true, forKey: "permission.\(identifier).verified")
+        moduleRevision &+= 1
+    }
+
     // MARK: Appearance
 
     /// Per-module colour, size, and placement.

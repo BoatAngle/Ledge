@@ -245,7 +245,9 @@ as modules are added.
 
 ## Permissions
 
-Four prompts, each from one module, each declinable without affecting anything else:
+Four prompts, each from one module, each declinable without affecting anything
+else — and none of them nag: a module asks once, ever, on its own; after that
+the dialog only appears from the Grant Access link on its row in Settings:
 
 - **Automation** (Music/Spotify) — Now Playing.
 - **Calendar** — the next-meeting module. Read-only.

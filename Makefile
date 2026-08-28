@@ -2,7 +2,7 @@ APP     := Islet.app
 CONTENT := $(APP)/Contents
 CONFIG  ?= release
 
-.PHONY: all build app intents run stop clean test install-cli
+.PHONY: all build app intents run stop clean test install-cli dist
 
 all: app
 
@@ -77,5 +77,11 @@ install-cli: app
 	@echo "Run this to add islet to your PATH:"
 	@echo "  sudo ln -sf \"$(CURDIR)/$(CONTENT)/Helpers/islet\" /usr/local/bin/islet"
 
+## Zip the app for distribution, preserving signatures and symlinks.
+dist: app
+	@mkdir -p dist
+	@ditto -c -k --keepParent $(APP) dist/Islet-$$(defaults read "$(CURDIR)/Resources/Info" CFBundleShortVersionString).zip
+	@ls -lh dist/
+
 clean:
-	@rm -rf .build $(APP)
+	@rm -rf .build $(APP) dist

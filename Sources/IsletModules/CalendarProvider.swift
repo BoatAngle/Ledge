@@ -20,12 +20,36 @@ public final class CalendarProvider: SystemProvider {
             && EKEventStore.authorizationStatus(for: .event) != .restricted
     }
 
+    public var permissionState: ModulePermissionState {
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .fullAccess, .writeOnly: return .granted
+        case .denied, .restricted: return .denied
+        case .notDetermined: return .needsRequest
+        @unknown default: return .needsRequest
+        }
+    }
+
+    /// The explicit Grant Access gesture from Settings.
+    public func requestPermission() async -> Bool {
+        settings.markPermissionAutoRequested(identifier)
+        let granted = await Self.requestAccess(eventStore)
+        if granted {
+            isAuthorized = true
+            if store != nil {
+                poller.start()
+                refresh()
+            }
+        }
+        return granted
+    }
+
     /// How far ahead of a meeting the island starts caring.
     public var leadTime: TimeInterval = 15 * 60
     /// How long an in-progress meeting stays up after it starts.
     public var lingerAfterStart: TimeInterval = 5 * 60
 
     private weak var store: ActivityStore?
+    private let settings: IsletSettings
     private let eventStore = EKEventStore()
     private var isAuthorized = false
     private var shownEventID: String?
@@ -35,14 +59,28 @@ public final class CalendarProvider: SystemProvider {
     /// only decides when we notice a *different* meeting is now next.
     private lazy var poller = PollTimer(interval: 20) { [weak self] in self?.refresh() }
 
-    public init() {}
+    public init(settings: IsletSettings = .shared) {
+        self.settings = settings
+    }
 
     public func start(store: ActivityStore) {
         self.store = store
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            self.isAuthorized = await Self.requestAccess(self.eventStore)
+            switch EKEventStore.authorizationStatus(for: .event) {
+            case .fullAccess, .writeOnly:
+                self.isAuthorized = true
+            case .notDetermined where !self.settings.hasAutoRequestedPermission(self.identifier):
+                // First launch ever: one unsolicited ask is fair. Never again
+                // after this — an unanswered dialog (killed by a relaunch)
+                // must not come back on its own; the road back is the Grant
+                // Access button in Settings.
+                self.settings.markPermissionAutoRequested(self.identifier)
+                self.isAuthorized = await Self.requestAccess(self.eventStore)
+            default:
+                return
+            }
             guard self.isAuthorized else { return }
             self.poller.start()
             self.refresh()

@@ -18,6 +18,7 @@ struct ModuleInfo: Identifiable, Hashable {
     var isAvailable: Bool
     var summary: String
     var group: ModuleGroup = .system
+    var permission: ModulePermissionState = .notNeeded
 }
 
 /// The two kinds of thing a module puts on the island: ongoing activities
@@ -324,8 +325,10 @@ struct ModuleSettings: View {
     var session: SettingsSession
     var modules: () -> [ModuleInfo]
     var onToggle: (String, Bool) -> Void
+    var onGrant: (String) async -> Bool
 
     @State private var editing: ModuleInfo?
+    @State private var granting: String?
 
     var body: some View {
         // Read the revisions so @Observable registers dependencies on state
@@ -367,6 +370,49 @@ struct ModuleSettings: View {
         .onChange(of: session.customizing) { _, _ in openRequestedCustomizer() }
     }
 
+    private func summaryLine(_ module: ModuleInfo) -> String {
+        if !module.isAvailable {
+            return module.permission == .denied
+                ? "Access was declined. Grant it in System Settings, then relaunch Islet."
+                : "Not available on this Mac"
+        }
+        return module.summary
+    }
+
+    /// The explicit gesture the one-and-done permission rule waits for: a
+    /// module that still needs its system permission gets a Grant Access
+    /// link; one that was declined gets the road to System Settings.
+    @ViewBuilder
+    private func permissionAffordance(_ module: ModuleInfo, isEnabled: Bool) -> some View {
+        if module.isAvailable, isEnabled, module.permission == .needsRequest {
+            Button {
+                granting = module.id
+                Task { @MainActor in
+                    _ = await onGrant(module.id)
+                    granting = nil
+                }
+            } label: {
+                if granting == module.id {
+                    Text("Waiting for permission…")
+                        .font(.caption)
+                } else {
+                    Text("Grant Access…")
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.link)
+            .disabled(granting != nil)
+        } else if module.permission == .denied {
+            Button("Open System Settings…") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+        }
+    }
+
     /// Honours `islet settings --customize <id>` whether the pane is being
     /// shown fresh or is already on screen.
     private func openRequestedCustomizer() {
@@ -397,9 +443,10 @@ struct ModuleSettings: View {
                     }
                 }
                 .animation(.snappy(duration: 0.25), value: appearance.isDefault)
-                Text(module.isAvailable ? module.summary : "Not available on this Mac")
+                Text(summaryLine(module))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                permissionAffordance(module, isEnabled: isEnabled)
             }
 
             Spacer()

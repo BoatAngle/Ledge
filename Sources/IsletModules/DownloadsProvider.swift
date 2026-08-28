@@ -45,6 +45,7 @@ public final class DownloadsProvider: SystemProvider {
     }
 
     private weak var store: ActivityStore?
+    private let settings: IsletSettings
     private var watcher: DispatchSourceFileSystemObject?
     private var descriptor: CInt = -1
     private var inFlight: [String: InFlight] = [:]
@@ -53,7 +54,31 @@ public final class DownloadsProvider: SystemProvider {
     /// Only runs while something is downloading — see `syncPoller()`.
     private lazy var poller = PollTimer(interval: 0.6) { [weak self] in self?.scan() }
 
-    public init() {}
+    public init(settings: IsletSettings = .shared) {
+        self.settings = settings
+    }
+
+    /// The Downloads permission has no queryable status, so what we remember
+    /// is whether access has verifiably worked: `.granted` after the first
+    /// successful open, `.needsRequest` until then.
+    public var permissionState: ModulePermissionState {
+        settings.hasVerifiedPermission(identifier) ? .granted : .needsRequest
+    }
+
+    /// The explicit Grant Access gesture from Settings.
+    public func requestPermission() async -> Bool {
+        settings.markPermissionAutoRequested(identifier)
+        let descriptor = await Self.openDownloadsFolder()
+        guard descriptor >= 0 else { return false }
+        settings.markPermissionVerified(identifier)
+        if store != nil {
+            startWatching(descriptor: descriptor)
+            scan()
+        } else {
+            close(descriptor)
+        }
+        return true
+    }
 
     public func start(store: ActivityStore) {
         self.store = store
@@ -64,10 +89,22 @@ public final class DownloadsProvider: SystemProvider {
         // island, the menu bar item, and the API for as long as the prompt sits
         // there — so the blocking call goes to a background queue and only the
         // result comes back.
+        //
+        // One-and-done: the consent dialog may be raised unsolicited exactly
+        // once, on the first launch ever. An unanswered dialog (killed by a
+        // relaunch) must not come back on its own — after that, access is
+        // only attempted once it has verifiably worked, or from the Grant
+        // Access button in Settings.
+        let verified = settings.hasVerifiedPermission(identifier)
+        if !verified {
+            guard !settings.hasAutoRequestedPermission(identifier) else { return }
+            settings.markPermissionAutoRequested(identifier)
+        }
         Task { @MainActor [weak self] in
             guard let self, self.store != nil else { return }
             let descriptor = await Self.openDownloadsFolder()
             guard self.store != nil, descriptor >= 0 else { return }
+            self.settings.markPermissionVerified(self.identifier)
             self.startWatching(descriptor: descriptor)
             self.scan()
         }
