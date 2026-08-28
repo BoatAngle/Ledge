@@ -132,7 +132,7 @@ Weather in Notch**.
 Requires macOS 14 Sonoma or newer, and Xcode's toolchain to build.
 
 ```bash
-git clone <your-fork> Islet && cd Islet
+git clone https://github.com/BoatAngle/Islet.git && cd Islet
 make run
 ```
 

@@ -743,10 +743,17 @@ struct AboutSettings: View {
                         .textSelection(.enabled)
                 }
             }
+
+            Section {
+                Link("GitHub", destination: Self.repoURL)
+                Link("Report an Issue", destination: Self.repoURL.appendingPathComponent("issues"))
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 540)
+        .frame(width: 540, height: 560)
     }
+
+    private static let repoURL = URL(string: "https://github.com/BoatAngle/Islet")!
 
     private var installCommand: String {
         "sudo ln -sf \"\(cliPath)\" /usr/local/bin/islet"
