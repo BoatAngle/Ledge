@@ -18,6 +18,10 @@ public enum DetailStyle: Equatable, Sendable {
     case rules
     /// Translucent group.
     case glass
+    /// A filled group defined by a one-pixel stroke — a WinUI card.
+    case card
+    /// An inset well carved into the surface.
+    case soft
     /// Nothing but spacing.
     case plain
 }
@@ -26,6 +30,12 @@ public enum ChipStyle: Equatable, Sendable {
     case tinted
     case neutral
     case glass
+    /// A flat circular tonal container — M3's icon chip.
+    case tonal
+    /// A near-black tile ringed in glowing accent.
+    case emissive
+    /// Extruded from the surface — dual shadows, no outline.
+    case soft
     /// No container — the glyph stands alone.
     case none
 }
@@ -34,6 +44,16 @@ public enum ActionStyle: Equatable, Sendable {
     case filled
     case bordered
     case glass
+    /// A squared accent-filled control — WinUI's AccentButton.
+    case accent
+    /// A flat tonal pill — M3's filled tonal button.
+    case tonal
+    /// A dark capsule ringed and lit in the accent.
+    case emissive
+    /// Extruded from the surface; presses back in.
+    case soft
+    /// A command in square brackets — text only, monochrome, monospaced.
+    case command
     /// Text only.
     case plain
 }
@@ -93,6 +113,8 @@ public struct IslandTheme: Equatable, Sendable {
     // Type
     public var titleSize: CGFloat
     public var titleWeight: Font.Weight
+    /// Mono sets .monospaced; every other theme stays .default.
+    public var titleDesign: Font.Design
     public var titleTracking: CGFloat
     public var subtitleSize: CGFloat
     public var metricDesign: Font.Design
@@ -126,6 +148,7 @@ public struct IslandTheme: Equatable, Sendable {
         glyphFill: .outline,
         titleSize: 13.5,
         titleWeight: .semibold,
+        titleDesign: .default,
         titleTracking: -0.1,
         subtitleSize: 11,
         metricDesign: .default,
@@ -155,6 +178,7 @@ public struct IslandTheme: Equatable, Sendable {
         glyphFill: .solid,
         titleSize: 14,
         titleWeight: .semibold,
+        titleDesign: .default,
         titleTracking: -0.24,
         subtitleSize: 11.5,
         metricDesign: .rounded,
@@ -184,6 +208,7 @@ public struct IslandTheme: Equatable, Sendable {
         glyphFill: .solid,
         titleSize: 14,
         titleWeight: .medium,
+        titleDesign: .default,
         titleTracking: -0.2,
         subtitleSize: 11.5,
         metricDesign: .rounded,
@@ -213,6 +238,7 @@ public struct IslandTheme: Equatable, Sendable {
         glyphFill: .outline,
         titleSize: 15,
         titleWeight: .medium,
+        titleDesign: .default,
         titleTracking: -0.35,
         subtitleSize: 11,
         metricDesign: .default,
@@ -225,19 +251,184 @@ public struct IslandTheme: Equatable, Sendable {
         progressUsesGradient: false
     )
 
+    /// Cool acrylic, squared corners, one-pixel strokes; accent belongs to
+    /// the controls. The island as Windows 11 would draw it.
+    public static let fluent = IslandTheme(
+        id: .fluent,
+        surfaceLift: 0.05,
+        rimOpacity: 0.12,
+        usesGlass: true,
+        glassScrim: 0.55,
+        bottomRadiusScale: 0.7,
+        glyphGlow: 0,
+        glyphWeight: .regular,
+        prefersFilledSymbols: false,
+        accentUsage: .sparing,
+        compactGlyphScale: 0.95,
+        glyphLineWidth: 1.5,
+        glyphFill: .outline,
+        titleSize: 14,
+        titleWeight: .semibold,
+        titleDesign: .default,
+        titleTracking: 0,
+        subtitleSize: 11.5,
+        metricDesign: .default,
+        metricWeight: .semibold,
+        detailStyle: .card,
+        chipStyle: .neutral,
+        actionStyle: .accent,
+        panelSpacing: 12,
+        progressHeight: 3,
+        progressUsesGradient: false
+    )
+
+    /// Material 3, dark scheme. Colour lives in flat tonal containers,
+    /// elevation is a lighter tone rather than a blur or a shadow, and every
+    /// control is a full pill. Opaque on purpose — M3 surfaces are paint,
+    /// not glass.
+    public static let material = IslandTheme(
+        id: .material,
+        surfaceLift: 0.06,
+        rimOpacity: 0.04,
+        usesGlass: false,
+        glassScrim: 0,
+        bottomRadiusScale: 1.2,
+        glyphGlow: 0,
+        glyphWeight: .regular,
+        prefersFilledSymbols: true,
+        accentUsage: .full,
+        compactGlyphScale: 1,
+        glyphLineWidth: 2.0,
+        glyphFill: .solid,
+        titleSize: 14.5,
+        titleWeight: .medium,
+        titleDesign: .default,
+        titleTracking: 0.1,
+        subtitleSize: 11.5,
+        metricDesign: .default,
+        metricWeight: .medium,
+        detailStyle: .grouped,
+        chipStyle: .tonal,
+        actionStyle: .tonal,
+        panelSpacing: 13,
+        progressHeight: 6,
+        progressUsesGradient: false
+    )
+
+    /// Emissive colour on a void-black body. Nothing here is painted — glyphs,
+    /// rims, rings and bars all read as light sources, which only works because
+    /// the surface itself stays as close to off as the family allows.
+    public static let neon = IslandTheme(
+        id: .neon,
+        surfaceLift: 0.02,
+        rimOpacity: 0.38,
+        usesGlass: false,
+        glassScrim: 0,
+        bottomRadiusScale: 1,
+        glyphGlow: 0.6,
+        glyphWeight: .semibold,
+        prefersFilledSymbols: false,
+        accentUsage: .full,
+        compactGlyphScale: 1,
+        glyphLineWidth: 2.0,
+        glyphFill: .outline,
+        titleSize: 13.5,
+        titleWeight: .semibold,
+        titleDesign: .default,
+        titleTracking: 0.5,
+        subtitleSize: 11,
+        metricDesign: .rounded,
+        metricWeight: .semibold,
+        detailStyle: .rules,
+        chipStyle: .emissive,
+        actionStyle: .emissive,
+        panelSpacing: 12,
+        progressHeight: 3.5,
+        progressUsesGradient: true
+    )
+
+    /// Sculpted, not drawn: the panel is a slab of soft dark material, and
+    /// every control is extruded from it or pressed into it. Dual shadows,
+    /// no outlines, no glow — the light does the talking, quietly.
+    public static let soft = IslandTheme(
+        id: .soft,
+        surfaceLift: 0.09,
+        rimOpacity: 0.08,
+        usesGlass: false,
+        glassScrim: 0,
+        bottomRadiusScale: 1.25,
+        glyphGlow: 0,
+        glyphWeight: .medium,
+        prefersFilledSymbols: false,
+        accentUsage: .sparing,
+        compactGlyphScale: 0.95,
+        glyphLineWidth: 1.8,
+        glyphFill: .outline,
+        titleSize: 13.5,
+        titleWeight: .medium,
+        titleDesign: .default,
+        titleTracking: 0,
+        subtitleSize: 11,
+        metricDesign: .rounded,
+        metricWeight: .medium,
+        detailStyle: .soft,
+        chipStyle: .soft,
+        actionStyle: .soft,
+        panelSpacing: 14,
+        progressHeight: 6,
+        progressUsesGradient: false
+    )
+
+    /// The island as a status line: monospaced type on flat black, hairline
+    /// rules, bracketed commands, nothing lit. Colour appears only where it
+    /// encodes state, the way a status bar goes red.
+    public static let mono = IslandTheme(
+        id: .mono,
+        surfaceLift: 0.02,
+        rimOpacity: 0.08,
+        usesGlass: false,
+        glassScrim: 0,
+        bottomRadiusScale: 0.75,
+        glyphGlow: 0,
+        glyphWeight: .regular,
+        prefersFilledSymbols: false,
+        accentUsage: .sparing,
+        compactGlyphScale: 0.9,
+        glyphLineWidth: 1.5,
+        glyphFill: .outline,
+        titleSize: 13,
+        titleWeight: .semibold,
+        titleDesign: .monospaced,
+        titleTracking: 0,
+        subtitleSize: 10.5,
+        metricDesign: .monospaced,
+        metricWeight: .medium,
+        detailStyle: .rules,
+        chipStyle: .none,
+        actionStyle: .command,
+        panelSpacing: 9,
+        progressHeight: 3,
+        progressUsesGradient: false
+    )
+
     public static func preset(_ id: IslandThemeID) -> IslandTheme {
         switch id {
         case .system: return .system
         case .vivid: return .vivid
         case .glass: return .glass
         case .editorial: return .editorial
+        case .fluent: return .fluent
+        case .material: return .material
+        case .neon: return .neon
+        case .soft: return .soft
+        case .mono: return .mono
         }
     }
 
     // MARK: Derived
 
-    public var titleFont: Font { .system(size: titleSize, weight: titleWeight) }
-    public var subtitleFont: Font { .system(size: subtitleSize) }
+    public var titleFont: Font { .system(size: titleSize, weight: titleWeight, design: titleDesign) }
+    public var subtitleFont: Font { .system(size: subtitleSize, design: titleDesign) }
 
     public func metricFont(_ size: CGFloat) -> Font {
         .system(size: size, weight: metricWeight, design: metricDesign)

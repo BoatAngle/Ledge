@@ -213,21 +213,59 @@ public struct IslandButtonStyle: ButtonStyle {
         self.kind = kind
     }
 
+    @ViewBuilder
     public func makeBody(configuration: Configuration) -> some View {
-        let accent = isDestructive ? Color.red : IslandDesign.Ink.primary
-        configuration.label
-            .font(IslandDesign.Text.button)
-            .foregroundStyle(kind == .plain && !isDestructive ? tint : accent)
-            .padding(.horizontal, kind == .plain ? 0 : 13)
-            .padding(.vertical, kind == .plain ? 2 : 7)
-            .background { background }
-            .overlay { border }
+        if kind == .command {
+            // The brackets ARE the container — no fill, no stroke, no radius.
+            // A terminal control dims; it does not bounce.
+            HStack(spacing: 0) {
+                Text("[").foregroundStyle(IslandDesign.Ink.tertiary)
+                configuration.label
+                    .foregroundStyle(isDestructive ? Color.red : IslandDesign.Ink.primary)
+                Text("]").foregroundStyle(IslandDesign.Ink.tertiary)
+            }
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .padding(.horizontal, 2)
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .opacity(configuration.isPressed ? 0.75 : 1)
             .animation(
                 configuration.isPressed ? IslandMotion.pressIn : IslandMotion.pressRelease,
                 value: configuration.isPressed
             )
+        } else {
+            configuration.label
+                .font(IslandDesign.Text.button)
+                .foregroundStyle(labelColor)
+                .padding(.horizontal, kind == .plain ? 0 : 13)
+                .padding(.vertical, kind == .plain ? 2 : 7)
+                .background { background }
+                .overlay { border }
+                .scaleEffect(configuration.isPressed ? 0.95 : 1)
+                .opacity(configuration.isPressed ? 0.75 : 1)
+                .animation(
+                    configuration.isPressed ? IslandMotion.pressIn : IslandMotion.pressRelease,
+                    value: configuration.isPressed
+                )
+        }
+    }
+
+    private var labelColor: Color {
+        if isDestructive {
+            switch kind {
+            case .accent: return IslandDesign.Ink.primary // white on the red fill
+            case .tonal: return Color(red: 0.95, green: 0.72, blue: 0.70) // M3 on-error-container
+            default: return Color.red
+            }
+        }
+        switch kind {
+        case .plain, .emissive: return tint
+        // WinUI TextOnAccentFillColorPrimary (dark theme): near-black on the
+        // bright accent fill.
+        case .accent: return Color.black.opacity(0.9)
+        default: return IslandDesign.Ink.primary
+        }
     }
 
     @ViewBuilder
@@ -248,7 +286,38 @@ public struct IslandButtonStyle: ButtonStyle {
             } else {
                 Capsule(style: .continuous).fill(Color.white.opacity(0.14))
             }
-        case .bordered, .plain:
+        case .accent:
+            // WinUI AccentButton: a squared accent fill; corners are circular
+            // arcs, not superellipses.
+            RoundedRectangle(cornerRadius: 5, style: .circular)
+                .fill(isDestructive ? Color.red.opacity(0.85) : tint)
+        case .tonal:
+            // M3 filled tonal button: a flat wash, elevation 0, no outline.
+            Capsule(style: .continuous)
+                .fill(isDestructive ? Color.red.opacity(0.22) : tint.opacity(0.20))
+        case .emissive:
+            Capsule(style: .continuous)
+                .fill((isDestructive ? Color.red : tint).opacity(0.10))
+        case .soft:
+            // Same emboss recipe as the .soft chip. The material stays
+            // neutral even when destructive — the red label carries the
+            // meaning; a neumorphic object changes state, not substance.
+            Capsule(style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.15), Color(white: 0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    if isDestructive {
+                        Capsule(style: .continuous).fill(Color.red.opacity(0.08))
+                    }
+                }
+                .shadow(color: .black.opacity(0.55), radius: 4, x: 2, y: 3)
+                .shadow(color: .white.opacity(0.05), radius: 3, x: -1.5, y: -2)
+        case .bordered, .plain, .command:
             Color.clear
         }
     }
@@ -270,7 +339,30 @@ public struct IslandButtonStyle: ButtonStyle {
                 Capsule(style: .continuous)
                     .strokeBorder(IslandDesign.Ink.quaternary, lineWidth: 0.75)
             }
-        case .plain:
+        case .accent:
+            // WinUI's ControlElevationBorder: the 1px stroke IS the elevation.
+            RoundedRectangle(cornerRadius: 5, style: .circular)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        case .emissive:
+            // The 1pt tinted ring with its bloom — the border is the light.
+            Capsule(style: .continuous)
+                .strokeBorder((isDestructive ? Color.red : tint).opacity(0.80), lineWidth: 1)
+                .shadow(color: (isDestructive ? Color.red : tint).opacity(0.50), radius: 3)
+        case .soft:
+            Capsule(style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(0.16), location: 0),
+                            .init(color: .white.opacity(0.02), location: 0.55),
+                            .init(color: .white.opacity(0), location: 1),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        case .tonal, .plain, .command:
             Color.clear
         }
     }

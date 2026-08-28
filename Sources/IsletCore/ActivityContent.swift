@@ -134,6 +134,17 @@ public struct ActivityAction: Codable, Hashable, Sendable, Identifiable {
         self.url = url
         self.isDestructive = isDestructive
     }
+
+    /// Hand-written so hand-authored JSON only needs `id` and `title` — the
+    /// same courtesy the content decoder extends.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        symbol = try container.decodeIfPresent(String.self, forKey: .symbol)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+        isDestructive = try container.decodeIfPresent(Bool.self, forKey: .isDestructive) ?? false
+    }
 }
 
 /// A key/value row in the expanded presentation.

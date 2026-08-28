@@ -180,7 +180,32 @@ Full JSON payloads work too, for anything the flags don't cover:
 echo '{"title":"Custom","progress":{"fraction":0.5}}' | islet start --stdin
 ```
 
-Only `title` is required — you never have to write empty arrays.
+Only `title` is required — you never have to write empty arrays, and action
+buttons need only `id` and `title`.
+
+## Themes
+
+Nine, and each is a whole position rather than a color swap — a different
+answer to "what is this object made of, and how loudly does it speak":
+
+![All nine themes](docs/themes.png)
+
+- **System / Vivid / Glass / Editorial** — the Apple-native four: quiet chrome,
+  the iPhone island's confidence, real Liquid Glass (macOS 26+), and a type-led
+  minimal cut.
+- **Fluent** — the island as Windows 11 would draw it: acrylic, tight corners,
+  one-pixel card strokes, accent-filled buttons.
+- **Material** — Material 3's dark scheme: flat tonal containers, full-pill
+  buttons, elevation told in tone rather than shadow.
+- **Neon** — emissive color on true black: outlined glyphs glow like tube
+  light, controls are lit rings.
+- **Soft** — dark neumorphism: controls extruded from the surface on dual
+  shadows, pressed back in when you click.
+- **Mono** — terminal chic: monospaced type, hairline rules, commands in
+  `[brackets]`. The island as a status line.
+
+Whatever the theme, the closed pill stays hardware-black — themes speak in the
+expanded panel, the glyphs, the type, and the accents.
 
 ## Icons
 

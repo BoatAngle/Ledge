@@ -361,6 +361,62 @@ public struct ExpandedView: View {
                             lineWidth: 0.75
                         )
                 }
+        case .tonal:
+            // M3's circular icon container: a flat tonal wash, nothing else.
+            // A hairline or gradient would collapse it back into Vivid's chip.
+            content()
+                .frame(width: size, height: size)
+                .background {
+                    Circle().fill(style.tint.opacity(0.22))
+                }
+        case .emissive:
+            // A near-black tile whose 1pt tinted ring is the light source —
+            // the shadow blooms the ring only; the glyph already carries glow.
+            content()
+                .frame(width: size, height: size)
+                .background {
+                    RoundedRectangle(cornerRadius: size * IslandDesign.markCornerRatio, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: size * IslandDesign.markCornerRatio, style: .continuous)
+                        .strokeBorder(style.tint.opacity(0.85), lineWidth: 1)
+                        .shadow(color: style.tint.opacity(0.55), radius: 4)
+                }
+        case .soft:
+            // Extruded: top-leading-lit fill whose dark corner lands on the
+            // panel's own lift, dual shadows on the shape only, and a
+            // top-leading stroke gradient standing in for the inner light
+            // SwiftUI can't draw.
+            content()
+                .frame(width: size, height: size)
+                .background {
+                    RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(white: 0.16), Color(white: 0.09)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.55), radius: 4, x: 2, y: 3)
+                        .shadow(color: .white.opacity(0.05), radius: 3, x: -1.5, y: -2)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.15), location: 0),
+                                    .init(color: .white.opacity(0.02), location: 0.55),
+                                    .init(color: .white.opacity(0), location: 1),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
         case .none:
             content()
         }
@@ -368,6 +424,7 @@ public struct ExpandedView: View {
 
     private func details(_ rows: [ActivityDetail]) -> some View {
         let showsRules = theme.detailStyle == .rules || theme.detailStyle == .grouped
+            || theme.detailStyle == .card
         return VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, detail in
                 if index > 0, showsRules {
@@ -417,6 +474,42 @@ public struct ExpandedView: View {
                                 endPoint: .bottom
                             ),
                             lineWidth: 0.75
+                        )
+                }
+        case .card:
+            // WinUI dark card tokens: white 5% fill, white 8% one-pixel
+            // stroke, radius 8. Circular corners — Windows arcs, not
+            // superellipses.
+            RoundedRectangle(cornerRadius: 8, style: .circular)
+                .fill(Color.white.opacity(0.05))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .circular)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                }
+        case .soft:
+            // The exact inverse of the .soft chip: carved into the surface,
+            // darker at the lit corner, stroke running shadow-to-light.
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.035), Color(white: 0.075)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black.opacity(0.5), location: 0),
+                                    .init(color: .black.opacity(0.1), location: 0.5),
+                                    .init(color: .white.opacity(0.07), location: 1),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
                         )
                 }
         case .rules, .plain:

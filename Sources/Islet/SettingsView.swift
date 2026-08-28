@@ -181,11 +181,12 @@ struct GeneralSettings: View {
         .frame(width: 540, height: 700)
     }
 
-    /// The four cards. Selection is a tinted fill that physically slides
-    /// between cells via matched geometry.
+    /// The theme cards, three up. Selection is a tinted fill that physically
+    /// slides between cells via matched geometry.
     private var themeGrid: some View {
         LazyVGrid(
             columns: [
+                GridItem(.flexible(), spacing: 10),
                 GridItem(.flexible(), spacing: 10),
                 GridItem(.flexible(), spacing: 10),
             ],
@@ -256,18 +257,19 @@ private struct ThemeCard: View {
         Button(action: select) {
             VStack(spacing: 7) {
                 IslandPreviewStage {
-                    // The full preview is ~330pt wide; thumbnail it so two
+                    // The full preview is ~330pt wide; thumbnail it so three
                     // cards fit side by side. scaleEffect doesn't change
                     // layout size, so the frame after it does the fitting.
                     IslandStylePreview(activity: sample, style: style)
-                        .scaleEffect(0.55, anchor: .top)
-                        .frame(width: 184, height: 24)
+                        .scaleEffect(0.42, anchor: .top)
+                        .frame(width: 140, height: 18)
                 }
                 .islandTheme(.preset(id))
 
                 Text(id.label)
                     .font(.callout)
                     .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                    .lineLimit(1)
             }
             .padding(7)
             .background { selectionBackground }

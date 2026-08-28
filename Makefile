@@ -21,6 +21,7 @@ app: build
 	@# and the copy would silently clobber the app binary.
 	@cp .build/$(CONFIG)/islet-cli $(CONTENT)/Helpers/islet
 	@cp Resources/Info.plist $(CONTENT)/Info.plist
+	@cp Resources/AppIcon.icns $(CONTENT)/Resources/AppIcon.icns
 	@$(MAKE) --no-print-directory intents
 	@codesign --force --sign - $(CONTENT)/Helpers/islet >/dev/null 2>&1 || true
 	@codesign --force --sign - $(APP) >/dev/null 2>&1 || true

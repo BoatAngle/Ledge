@@ -295,6 +295,16 @@ public enum IslandThemeID: String, Codable, CaseIterable, Sendable {
     case glass
     /// Type-led and quiet, hairline rules instead of filled containers.
     case editorial
+    /// Windows 11: acrylic, tight corners, one-pixel strokes.
+    case fluent
+    /// Material 3 dark: flat tonal containers, full pills.
+    case material
+    /// Emissive accents on a void-black body.
+    case neon
+    /// Dark neumorphism: controls extruded from the surface.
+    case soft
+    /// Terminal chic: monospaced, hairlines, bracketed commands.
+    case mono
 
     public var label: String {
         switch self {
@@ -302,6 +312,11 @@ public enum IslandThemeID: String, Codable, CaseIterable, Sendable {
         case .vivid: return "Vivid"
         case .glass: return "Glass"
         case .editorial: return "Editorial"
+        case .fluent: return "Fluent"
+        case .material: return "Material"
+        case .neon: return "Neon"
+        case .soft: return "Soft"
+        case .mono: return "Mono"
         }
     }
 
@@ -315,6 +330,16 @@ public enum IslandThemeID: String, Codable, CaseIterable, Sendable {
             return "Translucent panel over a frosted blur, with lit edges."
         case .editorial:
             return "Type first. Hairline rules, generous spacing, one restrained accent."
+        case .fluent:
+            return "Frosted acrylic behind tight corners and one-pixel strokes, with color saved for the controls — the island as Windows 11 would draw it."
+        case .material:
+            return "Flat tonal containers, filled marks, full-pill buttons. Material 3's dark scheme — elevation told in tone, never in shadow."
+        case .neon:
+            return "Emissive on true black. Outlined glyphs glow like tube light, edges run bright, and color reads as light rather than paint."
+        case .soft:
+            return "Controls rise out of the surface on soft dual shadows and press back in. Muted color, pillowy corners, no hard edges."
+        case .mono:
+            return "Monospaced type, hairline rules, commands in brackets. The island as a status line."
         }
     }
 }
