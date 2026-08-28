@@ -35,7 +35,24 @@ final class ActivityServer {
     /// Identity of the socket file we created, so shutdown can tell ours apart
     /// from a successor's.
     private var boundInode: (device: dev_t, inode: ino_t)?
-    private let ioQueue = DispatchQueue(label: "com.ledge.server.io", qos: .userInitiated)
+    /// Concurrent, not serial.
+    ///
+    /// A serial queue here means one connection at a time, and a connection
+    /// that opens the socket and then says nothing holds the queue for as long
+    /// as it likes — every subsequent `ledge` command hangs behind it with no
+    /// visible cause. Concurrency plus the receive timeout below makes a stuck
+    /// client cost exactly one thread for at most `clientTimeout`.
+    private let ioQueue = DispatchQueue(
+        label: "com.ledge.server.io",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
+    /// How long a client gets to send its request line, and to take its answer.
+    ///
+    /// Generous for a local socket where the whole exchange is one line each
+    /// way, and short enough that a wedged client is a blip rather than a leak.
+    private static let clientTimeout = timeval(tv_sec: 5, tv_usec: 0)
 
     init(store: ActivityStore) {
         self.store = store
@@ -131,6 +148,14 @@ final class ActivityServer {
         let client = accept(listenDescriptor, nil, nil)
         guard client >= 0 else { return }
 
+        // Neither direction may block indefinitely: a client that connects and
+        // stalls — deliberately or because it crashed mid-write — would
+        // otherwise pin a thread forever.
+        var timeout = Self.clientTimeout
+        let size = socklen_t(MemoryLayout<timeval>.size)
+        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, size)
+        setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, size)
+
         ioQueue.async { [weak self] in
             defer { close(client) }
             guard let line = Self.readLine(from: client), !line.isEmpty else { return }
@@ -162,12 +187,22 @@ final class ActivityServer {
             guard let activity = request.activity else {
                 return .failure("`present` needs an activity.")
             }
-            let stored = store.present(activity)
+            // Nothing arriving here may take over a built-in module's slot:
+            // `present` is keyed by id, so without this a client could aim at
+            // "system.privacy" and replace the mic indicator with anything it
+            // liked.
+            guard store.activities[activity.id]?.isModuleOwned != true else {
+                return .failure("\"\(activity.id)\" belongs to a built-in module.")
+            }
+            let stored = store.present(activity.sanitizedForExternalClient())
             return LedgeResponse(ok: true, id: stored.id)
 
         case .update:
             guard let id = request.id, let content = request.content else {
                 return .failure("`update` needs an id and content.")
+            }
+            guard store.activities[id]?.isModuleOwned != true else {
+                return .failure("\"\(id)\" belongs to a built-in module.")
             }
             guard store.update(id: id, content: content) else {
                 return .failure("No activity with id \"\(id)\".")
@@ -176,13 +211,31 @@ final class ActivityServer {
 
         case .end:
             guard let id = request.id else { return .failure("`end` needs an id.") }
+            // `ledge end <timer-id>` still means "cancel that timer" — the one
+            // place where removing the activity is supposed to be destructive,
+            // so it goes through the provider that owns the alarm rather than
+            // through the display.
+            if let timers, timers.cancel(id: id) {
+                return LedgeResponse(ok: true, id: id)
+            }
+            // Everything else a module owns is its own to publish. The privacy
+            // indicator is the reason this guard exists: `ledge end
+            // system.privacy` used to take the camera-in-use dot off the island
+            // and the provider, which only republishes on a state *change*,
+            // would leave it off for the rest of the call.
+            guard store.activities[id]?.isModuleOwned != true else {
+                return .failure("\"\(id)\" belongs to a built-in module. Turn the module off in Settings instead.")
+            }
             guard store.end(id: id) else {
                 return .failure("No activity with id \"\(id)\".")
             }
             return LedgeResponse(ok: true, id: id)
 
         case .endAll:
-            let count = store.endAll(source: request.source)
+            let count = store.endAll(
+                source: request.source,
+                includingModules: request.includeModules ?? false
+            )
             return LedgeResponse(ok: true, count: count)
 
         case .list:

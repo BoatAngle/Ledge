@@ -153,7 +153,8 @@ ledge start        Post an ongoing activity. Prints its id.
 ledge flash        Post a transient activity that retires itself.
 ledge update <id>  Change an existing activity's content.
 ledge end <id>     Remove an activity.
-ledge end-all      Remove everything (optionally --source <name>).
+ledge end-all      Clear what scripts posted (--source <name> to narrow;
+                   --include-modules to clear built-ins too).
 ledge list         Show what's currently on the island.
 ledge run -- <cmd> Run a command, showing progress; reports success or failure.
 ledge timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
@@ -169,7 +170,11 @@ ledge ping         Check that Ledge.app is running.
 Content flags: `--title --subtitle --body --trailing --icon --tint --progress
 --indeterminate --progress-label --countdown --count-up --detail --open`
 
-Behaviour flags: `--id --source --priority --dwell --stdin --json --quiet`
+Behaviour flags: `--id --source --priority --dwell --stdin --json --quiet
+--include-modules`
+
+`end-all` spares the built-in modules by default. Clearing the island is a
+display gesture, and it should not cancel the timer you have running.
 
 `--icon` takes `symbol:arrow.up.circle.fill`, `app:com.apple.Safari`, or
 `file:/path/to.png`. `--tint` takes a colour name or `#RRGGBB`.
@@ -252,13 +257,39 @@ the dialog only appears from the Grant Access link on its row in Settings:
 - **Automation** (Music/Spotify) — Now Playing.
 - **Calendar** — the next-meeting module. Read-only.
 - **Downloads folder** — download tracking.
-- **Location** — weather, and only when you first ask for it. In on-demand mode nothing is requested until you use it, and you can type coordinates in by hand instead. They go to Open-Meteo and nowhere else.
+- **Location** — weather, and only when you first ask for it. In on-demand mode nothing is requested until you use it, and you can type coordinates in by hand instead. They are rounded to about a kilometre and go to Open-Meteo and nowhere else — including the place name shown in the panel, which is derived from the time zone in that same reply rather than from a second lookup.
+
+Nothing prompts before the app has introduced itself: on a fresh install the
+welcome panel points at Settings › Modules, and a module only asks when you
+turn it on.
 
 And three you will never see:
 
 - **No Accessibility access.** Caps Lock is read by polling `NSEvent.modifierFlags`, not by installing a global key monitor — asking to "control your computer" so we can draw an arrow would be a bad trade.
 - **No microphone or camera access.** The privacy module asks the *hardware* whether someone else is using them; it never opens them.
 - **No Full Disk Access.** Downloads are tracked through the partial files browsers leave in `~/Downloads`, not by reading Safari's container.
+
+## Accessibility
+
+The island is a non-activating panel that can never take focus, so it tells
+VoiceOver what happened rather than waiting to be found: arriving activities are
+announced, and the panel's header, detail rows, progress, and page dots all
+carry labels and values. **Reduce Motion** swaps every spring, the metaball, the
+arrival bounce, and the two always-on animation loops for short cross-fades.
+**Reduce Transparency** makes the Glass theme solid. **Increase Contrast** lifts
+the whole ink ramp — which now clears WCAG on black at its baseline, including
+the page dots, which are a control and not decoration. Nothing on the island
+uses colour as its only signal: camera-and-microphone is two dots, not a
+different-coloured one.
+
+## Updates
+
+Once a day, Ledge asks GitHub whether a newer release exists. That request is
+the app's only outbound connection besides weather, and it is exactly what it
+sounds like: one unauthenticated `GET` for a public page, carrying no account,
+no machine identifier, no install id, and nothing about you. If a newer version
+exists it appears in the menu bar and in Settings › About. Turn it off there and
+no request is made at all.
 
 ## Known gaps
 

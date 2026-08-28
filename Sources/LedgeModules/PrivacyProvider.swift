@@ -46,7 +46,22 @@ public final class PrivacyProvider: SystemProvider {
 
     private func poll() {
         let state = currentState()
-        guard state != lastState else { return }
+
+        // Self-healing, deliberately.
+        //
+        // The short-circuit below is a real optimisation — the hardware state
+        // changes a handful of times a day and this runs twice a second — but
+        // on its own it made the indicator *removable*: anything that took the
+        // activity off the island left it off until the camera physically
+        // turned on or off again, which on a video call means the rest of the
+        // call. This is the one mark on the island that has to be true, so an
+        // active state re-publishes itself whenever it finds its activity gone.
+        if state == lastState {
+            guard state.isActive, store?.activities[identifier] == nil else { return }
+            publish(state, announce: false)
+            return
+        }
+
         let wasActive = lastState.isActive
         lastState = state
 
@@ -63,18 +78,34 @@ public final class PrivacyProvider: SystemProvider {
         let title: String
         let symbol: String
         let tint: LedgeColor
+        // A second symbol, present only when BOTH devices are live.
+        //
+        // Colour was carrying this distinction alone, and failing at it: camera
+        // + microphone and microphone-only were both an orange dot, pixel for
+        // pixel. The compact mark now grows a second dot when both are in use,
+        // which is a difference in shape rather than in hue — visible to
+        // someone who can't separate green from orange, and visible at 5pt.
+        //
+        // The colours follow macOS's own convention rather than the previous
+        // mapping: green means the camera is on, orange means the microphone
+        // is. Camera-and-microphone therefore leads green, the same as Control
+        // Centre, instead of reading as a microphone.
+        let secondarySymbol: String?
         switch (state.camera, state.microphone) {
         case (true, true):
             title = "Camera & Microphone in use"
             symbol = "video.fill"
-            tint = LedgeColor.orange
+            secondarySymbol = "mic.fill"
+            tint = LedgeColor.green
         case (true, false):
             title = "Camera in use"
             symbol = "video.fill"
+            secondarySymbol = nil
             tint = LedgeColor.green
         default:
             title = "Microphone in use"
             symbol = "mic.fill"
+            secondarySymbol = nil
             tint = LedgeColor.orange
         }
 
@@ -84,7 +115,12 @@ public final class PrivacyProvider: SystemProvider {
                 id: "system.privacyStart",
                 nativeView: .privacy,
                 module: identifier,
-                content: ActivityContent(title: title, icon: .symbol(symbol), tint: tint),
+                content: ActivityContent(
+                    title: title,
+                    icon: .symbol(symbol),
+                    trailingIcon: secondarySymbol.map(ActivityIcon.symbol),
+                    tint: tint
+                ),
                 priority: .high,
                 dwell: 2.0
             )
@@ -104,6 +140,7 @@ public final class PrivacyProvider: SystemProvider {
                         ? "Something is using them right now"
                         : "Something is using it right now",
                     icon: .symbol(symbol),
+                    trailingIcon: secondarySymbol.map(ActivityIcon.symbol),
                     tint: tint
                 ),
                 nativeView: .privacy,

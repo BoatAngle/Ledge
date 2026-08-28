@@ -47,7 +47,16 @@ public final class DropShelf {
 
     // MARK: - Drag lifecycle
 
-    public func dragEntered() {
+    /// How many files are riding on the current drag.
+    ///
+    /// Supplied by the drag destination, which has already read the pasteboard
+    /// to decide whether to accept at all. The compact presentation is
+    /// deliberately wordless, so the count is the only honest thing the island
+    /// can say about an incoming drop — and it is the thing worth saying.
+    private var incomingCount = 0
+
+    public func dragEntered(count: Int = 0) {
+        incomingCount = max(incomingCount, count)
         guard !isTargeted else { return }
         isTargeted = true
         // A beat before the island reacts: a drag merely PASSING over the
@@ -87,9 +96,20 @@ public final class DropShelf {
                 kind: .transient,
                 priority: .critical,
                 content: ActivityContent(
+                    // The title and subtitle are for VoiceOver and for the
+                    // panel; the compact strip stays wordless by design.
                     title: files.isEmpty ? "Drop to hold" : "Add to shelf",
                     subtitle: "Release to keep these here",
                     icon: .symbol("tray.and.arrow.down.fill"),
+                    // Both sides of the notch now say "incoming": the tray
+                    // leading, and how many files trailing. Without this the
+                    // trailing slot fell through to the generic breathing dot
+                    // — the same mark Focus mode uses — so the one state where
+                    // the island is a drop target looked like every other
+                    // state, and nothing on screen said releasing would do
+                    // anything at all.
+                    trailingIcon: incomingCount > 0 ? nil : .symbol("arrow.down"),
+                    trailingText: incomingCount > 0 ? "\(incomingCount)" : nil,
                     tint: .accent
                 ),
                 nativeView: .dropZone,
@@ -103,6 +123,7 @@ public final class DropShelf {
         guard isTargeted else { return }
         isTargeted = false
         hintShown = false
+        incomingCount = 0
         hintTask?.cancel()
         hintTask = nil
         store?.end(id: Self.hintID)

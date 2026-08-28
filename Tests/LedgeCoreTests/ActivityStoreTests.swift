@@ -125,6 +125,38 @@ final class ActivityStoreTests: XCTestCase {
         XCTAssertEqual(store.composition.mode, .idle)
     }
 
+    func testTheOpenPanelClosesRatherThanSwappingWhenItsActivityEnds() {
+        // The panel used to fall back to whatever led the sort. So a download
+        // finishing while its panel was open handed the user a *different*
+        // activity's buttons, under a cursor already travelling toward one.
+        let store = ActivityStore()
+        store.present(ongoing("download"))
+        store.present(ongoing("music"))
+        store.isExpanded = true
+        store.focusedActivityID = "download"
+        XCTAssertEqual(store.composition.expandedActivity?.id, "download")
+
+        store.end(id: "download")
+
+        XCTAssertFalse(store.isExpanded, "The thing being read ended; the panel goes with it")
+        XCTAssertNil(store.focusedActivityID)
+        XCTAssertNil(store.composition.expandedActivity)
+        XCTAssertEqual(store.composition.primary?.id, "music", "…but music keeps the island")
+    }
+
+    func testAnUnpinnedPanelStillTracksWhateverLeads() {
+        // `ledge expand` with no id makes no promise about *which* activity,
+        // so it is free to follow the primary slot.
+        let store = ActivityStore()
+        store.present(ongoing("a"))
+        store.isExpanded = true
+        XCTAssertEqual(store.composition.expandedActivity?.id, "a")
+
+        store.present(ongoing("b"))
+        XCTAssertTrue(store.isExpanded)
+        XCTAssertNotNil(store.composition.expandedActivity)
+    }
+
     func testExpandableIsDerivedFromContent() {
         let bare = Activity(id: "bare", content: ActivityContent(title: "Just a title"))
         XCTAssertFalse(bare.isExpandable, "Nothing more to say than the compact slot shows")

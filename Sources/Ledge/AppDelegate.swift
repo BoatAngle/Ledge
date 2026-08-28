@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         },
         onGrantPermission: { [weak self] identifier in
             await self?.grantPermission(identifier) ?? false
+        },
+        onCheckForUpdates: { [weak self] in
+            await self?.checkForUpdates() ?? .failed("Ledge is shutting down.")
         }
     )
     private var appearanceObserver: NSObjectProtocol?
@@ -70,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.server.timers = self.timerProvider
             self.server.weather = self.weatherProvider
             self.lockMonitor.start()
+            self.presentWelcomeIfNeeded()
+            self.checkForUpdatesIfDue()
         }
 
         do {
@@ -253,6 +258,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(demo)
 
         menu.addItem(.separator())
+
+        // Only when there is genuinely something to say. A permanent "Check for
+        // Updates…" row is one more thing to read every time the menu opens;
+        // the row appears when a newer version exists and is absent otherwise.
+        if let available = settings.availableUpdate {
+            let update = NSMenuItem(
+                title: "Update to \(available)…",
+                action: #selector(openReleases),
+                keyEquivalent: ""
+            )
+            update.target = self
+            update.image = NSImage(
+                systemSymbolName: "arrow.down.circle",
+                accessibilityDescription: nil
+            )
+            menu.addItem(update)
+            menu.addItem(.separator())
+        }
 
         let settingsItem = NSMenuItem(
             title: "Settings…",
@@ -457,6 +480,99 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 expiresAt: Date().addingTimeInterval(12)
             )
         )
+    }
+
+    // MARK: - First run
+
+    private var welcomeObserver: NSObjectProtocol?
+
+    /// Introduce the app, once, on the island itself. See `Welcome`.
+    private func presentWelcomeIfNeeded() {
+        guard !settings.hasSeenWelcome else { return }
+        // Marked immediately rather than on dismissal. A crash, a force-quit,
+        // or simply walking away must not turn a one-time introduction into
+        // something that greets you at every launch — the same reasoning that
+        // keeps the permission flags out of `resetToDefaults`.
+        settings.hasSeenWelcome = true
+
+        welcomeObserver = NotificationCenter.default.addObserver(
+            forName: .ledgeActionInvoked,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let id = note.userInfo?["actionID"] as? String else { return }
+            MainActor.assumeIsolated { self?.handleWelcomeAction(id) }
+        }
+
+        store.present(Welcome.activity())
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Welcome.openDelay)
+            guard let self, self.store.activities[Welcome.activityID] != nil else { return }
+            // Open it once, on its own. This is the only time Ledge ever opens
+            // its own panel unasked, and it is the whole point: an island that
+            // has never been seen to expand teaches nothing about what it is.
+            self.store.focusedActivityID = Welcome.activityID
+            self.store.isExpanded = true
+        }
+    }
+
+    private func handleWelcomeAction(_ id: String) {
+        switch id {
+        case Welcome.setUpAction:
+            store.isExpanded = false
+            store.end(id: Welcome.activityID)
+            settingsWindow.show(tab: .modules)
+        case Welcome.dismissAction:
+            store.isExpanded = false
+            store.end(id: Welcome.activityID)
+        default:
+            return
+        }
+        if let welcomeObserver {
+            NotificationCenter.default.removeObserver(welcomeObserver)
+            self.welcomeObserver = nil
+        }
+    }
+
+    // MARK: - Updates
+
+    /// Ask GitHub whether there is a newer release, at most once a day.
+    ///
+    /// Opt-out, disclosed in Settings, and carrying nothing that identifies the
+    /// machine — see `UpdateChecker`. An app installed *because* the
+    /// alternative turned out to be malware has to be able to tell people when
+    /// it has been fixed.
+    private func checkForUpdatesIfDue() {
+        guard settings.isUpdateCheckDue() else { return }
+        Task { @MainActor [weak self] in
+            await self?.checkForUpdates()
+        }
+    }
+
+    @discardableResult
+    func checkForUpdates() async -> UpdateChecker.Result {
+        let current = Bundle.main
+            .object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        let result = await UpdateChecker().check(current: current)
+        settings.lastUpdateCheck = Date()
+        switch result {
+        case .updateAvailable(let version, _):
+            settings.availableUpdate = version
+        case .upToDate:
+            settings.availableUpdate = nil
+        case .failed:
+            // Offline is the ordinary case. Leave whatever was last known
+            // rather than reporting "up to date" on the strength of a failed
+            // request — claiming to have checked when you haven't is worse
+            // than saying nothing.
+            break
+        }
+        return result
+    }
+
+    @objc private func openReleases() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/BoatAngle/Ledge/releases/latest")!)
     }
 
     @objc private func quit() {

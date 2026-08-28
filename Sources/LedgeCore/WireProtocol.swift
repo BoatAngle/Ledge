@@ -70,6 +70,12 @@ public struct LedgeRequest: Codable, Sendable {
     public var duration: Double?
     /// File paths. Only meaningful for `.shelf`; empty clears it.
     public var paths: [String]?
+    /// Only meaningful for `.endAll`: also clear activities the built-in
+    /// modules own — a running timer, what's playing, a download in progress.
+    ///
+    /// Off unless asked for. Clearing the island is a display gesture, and it
+    /// should not quietly cancel work.
+    public var includeModules: Bool?
 
     public init(
         command: LedgeCommand,
@@ -78,7 +84,8 @@ public struct LedgeRequest: Codable, Sendable {
         content: ActivityContent? = nil,
         source: String? = nil,
         duration: Double? = nil,
-        paths: [String]? = nil
+        paths: [String]? = nil,
+        includeModules: Bool? = nil
     ) {
         self.command = command
         self.activity = activity
@@ -87,6 +94,7 @@ public struct LedgeRequest: Codable, Sendable {
         self.source = source
         self.duration = duration
         self.paths = paths
+        self.includeModules = includeModules
     }
 
     /// Hand-written so every field but `command` is optional — the same
@@ -193,4 +201,9 @@ public extension Notification.Name {
     /// recomputed when activities change — without this, dragging the position
     /// slider would do nothing until the next thing happened.
     static let ledgeAppearanceChanged = Notification.Name("com.ledge.appearanceChanged")
+
+    /// Posted when a preference changes what display the island belongs on, so
+    /// the window controller can put it there — or take it away — immediately
+    /// rather than at the next launch.
+    static let ledgeDisplayPreferenceChanged = Notification.Name("com.ledge.displayPreferenceChanged")
 }

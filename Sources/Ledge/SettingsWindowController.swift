@@ -38,19 +38,22 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let weatherProvider: () -> WeatherProvider?
     private let onToggleModule: (String, Bool) -> Void
     private let onGrantPermission: (String) async -> Bool
+    private let onCheckForUpdates: () async -> UpdateChecker.Result
 
     init(
         settings: LedgeSettings,
         modules: @escaping () -> [ModuleInfo],
         weatherProvider: @escaping () -> WeatherProvider?,
         onToggleModule: @escaping (String, Bool) -> Void,
-        onGrantPermission: @escaping (String) async -> Bool
+        onGrantPermission: @escaping (String) async -> Bool,
+        onCheckForUpdates: @escaping () async -> UpdateChecker.Result
     ) {
         self.settings = settings
         self.modules = modules
         self.weatherProvider = weatherProvider
         self.onToggleModule = onToggleModule
         self.onGrantPermission = onGrantPermission
+        self.onCheckForUpdates = onCheckForUpdates
     }
 
     func show(tab: SettingsTab = .general, customizing: String? = nil) {
@@ -66,6 +69,19 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         promote()
         window.makeKeyAndOrderFront(nil)
+        // Belt and braces, and both are load-bearing.
+        //
+        // `NSApp.activate()` is cooperative on macOS 14+: the frontmost app can
+        // decline to yield, and a background agent that has just promoted
+        // itself from `.accessory` to `.regular` is exactly the case the system
+        // is most sceptical of. When it declines, `makeKeyAndOrderFront` puts
+        // the window behind everything and `ledge settings` looks like it did
+        // nothing at all — reproducibly, on a busy desktop.
+        //
+        // `orderFrontRegardless` doesn't ask. The window is something the user
+        // explicitly requested, from the menu or from the command line, so it
+        // should appear whether or not another app was willing to step aside.
+        window.orderFrontRegardless()
     }
 
     /// Builds the window once; it is never rebuilt afterwards. Panes react to
@@ -117,8 +133,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         case .weather:
             WeatherSettings(settings: settings, provider: weatherProvider)
         case .about:
-            AboutSettings(cliPath: Bundle.main.bundleURL
-                .appendingPathComponent("Contents/Helpers/ledge").path)
+            AboutSettings(
+                cliPath: Bundle.main.bundleURL
+                    .appendingPathComponent("Contents/Helpers/ledge").path,
+                settings: settings,
+                onCheckForUpdates: onCheckForUpdates
+            )
         }
     }
 

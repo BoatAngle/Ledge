@@ -49,8 +49,14 @@ public enum WeatherService {
     ) async throws -> WeatherSnapshot {
         var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
         components.queryItems = [
-            URLQueryItem(name: "latitude", value: String(format: "%.4f", latitude)),
-            URLQueryItem(name: "longitude", value: String(format: "%.4f", longitude)),
+            // Two decimal places: about a kilometre.
+            //
+            // Four was ~11 metres, which is a house. Nothing about a forecast
+            // changes at that resolution, so the extra precision was leaving
+            // the machine for no reason at all — and the cheapest privacy win
+            // available is not sending what you do not need.
+            URLQueryItem(name: "latitude", value: String(format: "%.2f", latitude)),
+            URLQueryItem(name: "longitude", value: String(format: "%.2f", longitude)),
             URLQueryItem(
                 name: "current",
                 value: "temperature_2m,apparent_temperature,weather_code,is_day,precipitation"
@@ -98,7 +104,9 @@ public enum WeatherService {
             precipitation: decoded.current.precipitation,
             high: decoded.daily.temperature_2m_max.first ?? decoded.current.temperature_2m,
             low: decoded.daily.temperature_2m_min.first ?? decoded.current.temperature_2m,
-            placeName: placeName,
+            // A caller-supplied name (the user typed one into Settings) wins;
+            // otherwise fall back to the zone Open-Meteo just resolved.
+            placeName: placeName ?? Self.placeName(fromTimezone: decoded.timezone),
             fetchedAt: Date()
         )
     }
@@ -117,6 +125,23 @@ public enum WeatherService {
         }
         var current: Current
         var daily: Daily
+        /// Present because the request sends `timezone=auto`. This is where
+        /// the place name comes from now — same reply, same service.
+        var timezone: String?
+    }
+
+    /// "America/Los_Angeles" -> "Los Angeles".
+    ///
+    /// Coarse by construction: it names a metropolitan zone, not a
+    /// neighbourhood, which is the right resolution for a subtitle and a
+    /// happy accident for privacy. Returns nil for the zones that carry no
+    /// place — "UTC", "GMT", and the "Etc/..." family.
+    static func placeName(fromTimezone zone: String?) -> String? {
+        guard let zone, !zone.isEmpty else { return nil }
+        guard !zone.hasPrefix("Etc/") else { return nil }
+        let last = zone.split(separator: "/").last.map(String.init) ?? zone
+        guard !["UTC", "GMT", "UCT", "Universal", "Zulu"].contains(last) else { return nil }
+        return last.replacingOccurrences(of: "_", with: " ")
     }
 }
 
@@ -193,10 +218,19 @@ final class LocationResolver: NSObject, CLLocationManagerDelegate, @unchecked Se
         }
     }
 
-    /// Best-effort place name for the expanded panel.
-    static func placeName(for location: CLLocation) async -> String? {
-        let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location)
-        guard let placemark = placemarks?.first else { return nil }
-        return placemark.locality ?? placemark.administrativeArea ?? placemark.country
-    }
+    // Reverse geocoding deliberately removed.
+    //
+    // There used to be a `placeName(for:)` here that sent the coordinate to
+    // `CLGeocoder` — that is, to Apple — purely to put a city name in the
+    // panel's subtitle. Three places in this project promise that the
+    // coordinate goes to "Open-Meteo and nowhere else": the Location usage
+    // string in Info.plist, the Weather pane's footer, and the README. Two
+    // recipients is not nowhere else.
+    //
+    // The right fix was to make the code match the promise rather than soften
+    // the promise, and it cost nothing: the forecast request already sends
+    // `timezone=auto`, and Open-Meteo answers with the resolved zone —
+    // "America/Los_Angeles" — whose last component is a serviceable place name
+    // once the underscores come out. The label now comes from the same reply
+    // as the temperature, from the one service the disclosure names.
 }

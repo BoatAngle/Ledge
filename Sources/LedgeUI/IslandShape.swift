@@ -138,8 +138,22 @@ public struct IslandSilhouette: View {
 
     /// The Glass theme's rim is tuned for the lit panel; on the closed black
     /// pill it drops to a whisper.
+    ///
+    /// Increase Contrast overrides that softening: the rim is the only thing
+    /// separating the island's lower edge from the desktop, and a whisper is
+    /// precisely what that setting exists to turn back up.
     private var rimStrength: Double {
-        theme.usesGlass && !showsGlass ? 0.35 : 1
+        if IslandAccessibility.shared.increaseContrast { return 1 }
+        return theme.usesGlass && !showsGlass ? 0.35 : 1
+    }
+
+    /// Whether the translucent stack should be drawn at all.
+    ///
+    /// Reduce Transparency makes the panel a solid object. Glass here is
+    /// decoration, not information — and a translucent panel over an arbitrary
+    /// desktop is exactly the legibility problem the setting exists to solve.
+    private var drawsGlass: Bool {
+        theme.usesGlass && hasDepth && !IslandAccessibility.shared.reduceTransparency
     }
 
     public var body: some View {
@@ -170,7 +184,7 @@ public struct IslandSilhouette: View {
 
     @ViewBuilder
     private var surface: some View {
-        if theme.usesGlass, hasDepth {
+        if drawsGlass {
             ZStack {
                 // Opaque base first: compact and split render as ONE black
                 // object. The glass stack above fades in with the panel, so

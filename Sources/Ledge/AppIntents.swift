@@ -95,12 +95,18 @@ struct EndActivityIntent: AppIntent {
 struct ClearIslandIntent: AppIntent {
     static let title: LocalizedStringResource = "Clear the Notch"
     static let description = IntentDescription(
-        "Removes every activity currently showing in the notch.",
+        """
+        Removes activities that apps and scripts have posted to the notch. \
+        Built-in modules are left alone, so a running timer keeps running.
+        """,
         categoryName: "Island"
     )
 
     func perform() async throws -> some IntentResult & ReturnsValue<Int> {
-        let response = try send(LedgeRequest(command: .endAll))
+        // Explicitly module-sparing. A shortcut named "Clear the Notch" that
+        // silently cancelled the user's 25-minute timer would be a genuinely
+        // destructive action wearing a tidy-up's clothes.
+        let response = try send(LedgeRequest(command: .endAll, includeModules: false))
         return .result(value: response.count ?? 0)
     }
 }

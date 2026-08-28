@@ -95,7 +95,11 @@ public final class LedgeSettings {
 
     /// Draw a virtual island on displays with no camera housing.
     public var showOnNotchlessDisplays: Bool {
-        didSet { defaults.set(showOnNotchlessDisplays, forKey: Keys.showOnNotchless) }
+        didSet {
+            defaults.set(showOnNotchlessDisplays, forKey: Keys.showOnNotchless)
+            guard showOnNotchlessDisplays != oldValue else { return }
+            NotificationCenter.default.post(name: .ledgeDisplayPreferenceChanged, object: nil)
+        }
     }
 
     /// Play the small bounce when an activity arrives.
@@ -142,6 +146,49 @@ public final class LedgeSettings {
         didSet { defaults.set(weatherAlerts, forKey: Keys.weatherAlerts) }
     }
 
+    // MARK: Updates
+
+    /// Ask GitHub, once a day, whether there is a newer release.
+    ///
+    /// On by default and one switch away from off. An app people install
+    /// *because* the alternative was malware has an obligation to tell them
+    /// when it has been patched — and an equal obligation to make the network
+    /// call visible, optional, and free of anything identifying.
+    public var checksForUpdates: Bool {
+        didSet { defaults.set(checksForUpdates, forKey: Keys.checksForUpdates) }
+    }
+
+    /// When the last check completed, so the daily budget survives relaunches.
+    public var lastUpdateCheck: Date? {
+        didSet {
+            defaults.set(lastUpdateCheck?.timeIntervalSinceReferenceDate, forKey: Keys.lastUpdateCheck)
+        }
+    }
+
+    /// The newest version GitHub has reported, if it is newer than this build.
+    /// Kept so the menu bar can carry the badge without re-checking.
+    public var availableUpdate: String? {
+        didSet { defaults.set(availableUpdate, forKey: Keys.availableUpdate) }
+    }
+
+    /// True once the automatic check is due again.
+    public func isUpdateCheckDue(now: Date = Date(), interval: TimeInterval = 86_400) -> Bool {
+        guard checksForUpdates else { return false }
+        guard let lastUpdateCheck else { return true }
+        return now.timeIntervalSince(lastUpdateCheck) >= interval
+    }
+
+    // MARK: First run
+
+    /// Whether the island has introduced itself.
+    ///
+    /// Ledge has no Dock icon and no window; on a quiet machine a first launch
+    /// is indistinguishable from nothing happening. It gets exactly one chance
+    /// to say hello, and this is what spends it.
+    public var hasSeenWelcome: Bool {
+        didSet { defaults.set(hasSeenWelcome, forKey: Keys.hasSeenWelcome) }
+    }
+
     // MARK: Init
 
     public init(defaults: UserDefaults = .standard) {
@@ -174,6 +221,12 @@ public final class LedgeSettings {
         manualLongitude = defaults.object(forKey: Keys.manualLongitude) as? Double ?? 0
         manualPlaceName = defaults.string(forKey: Keys.manualPlaceName) ?? ""
         weatherAlerts = defaults.object(forKey: Keys.weatherAlerts) as? Bool ?? false
+
+        checksForUpdates = defaults.object(forKey: Keys.checksForUpdates) as? Bool ?? true
+        lastUpdateCheck = (defaults.object(forKey: Keys.lastUpdateCheck) as? Double)
+            .map(Date.init(timeIntervalSinceReferenceDate:))
+        availableUpdate = defaults.string(forKey: Keys.availableUpdate)
+        hasSeenWelcome = defaults.bool(forKey: Keys.hasSeenWelcome)
     }
 
     // MARK: Modules
@@ -232,7 +285,19 @@ public final class LedgeSettings {
     /// prompting module asks once, ever; after that the dialog appears only
     /// from an explicit Grant Access gesture in Settings.
     public func hasAutoRequestedPermission(_ identifier: String) -> Bool {
-        defaults.bool(forKey: "permission.\(identifier).requested")
+        // Nothing prompts unsolicited before the app has introduced itself.
+        //
+        // The one-and-done rule stopped the *repeat* nag but not the first
+        // impression: a fresh install used to raise up to three system
+        // permission dialogs within seconds of launch, from an app with no
+        // window, no Dock icon, and nothing on screen to explain who was
+        // asking. Answering "Don't Allow" to that is the only sensible reflex.
+        //
+        // Reporting "already asked" until the welcome has been seen defers all
+        // of them to the welcome panel's own invitation, where each module row
+        // says what it wants and why before anything is requested.
+        guard hasSeenWelcome else { return true }
+        return defaults.bool(forKey: "permission.\(identifier).requested")
     }
 
     public func markPermissionAutoRequested(_ identifier: String) {
@@ -317,6 +382,10 @@ public final class LedgeSettings {
         static let manualLongitude = "weather.manualLongitude"
         static let manualPlaceName = "weather.manualPlaceName"
         static let weatherAlerts = "weather.alerts"
+        static let checksForUpdates = "updates.enabled"
+        static let lastUpdateCheck = "updates.lastCheck"
+        static let availableUpdate = "updates.available"
+        static let hasSeenWelcome = "onboarding.hasSeenWelcome"
 
         /// Unchanged from the original ad-hoc key so existing preferences
         /// survive the move into this type.
@@ -328,10 +397,18 @@ public final class LedgeSettings {
             "appearance.\(identifier)"
         }
 
+        /// Everything `resetToDefaults` clears.
+        ///
+        /// Deliberately excludes `hasSeenWelcome` and the `permission.*` flags,
+        /// for the same reason: a reset must restore preferences, not replay
+        /// one-time interruptions. Someone who resets their settings has not
+        /// asked to be introduced to the app again, or to be re-prompted for
+        /// Calendar access they already declined.
         static let all = [
             expandOnHover, hoverDelay, showOnNotchless, animateArrivals,
             theme, weatherMode, temperatureUnit, weatherLocationMode,
             manualLatitude, manualLongitude, manualPlaceName, weatherAlerts,
+            checksForUpdates, lastUpdateCheck, availableUpdate,
         ]
     }
 }

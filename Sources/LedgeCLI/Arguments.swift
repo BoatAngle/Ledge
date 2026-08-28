@@ -4,7 +4,7 @@ import Foundation
 /// initialises its globals in statement order, so a `let` written below the
 /// command dispatch would still be uninitialised when `printUsage()` reads it —
 /// which segfaults instead of printing help.
-let ledgeVersion = "0.2.0"
+let ledgeVersion = "0.3.0"
 
 /// A very small flag parser.
 ///

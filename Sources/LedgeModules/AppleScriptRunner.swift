@@ -9,6 +9,31 @@ import Foundation
 enum AppleScriptRunner {
     private static let queue = DispatchQueue(label: "com.ledge.applescript", qos: .utility)
 
+    /// Compiled scripts, keyed by source.
+    ///
+    /// `NSAppleScript(source:)` *compiles*, and the media poller was paying for
+    /// a fresh compile of the same twelve-line script once a second — 86,400
+    /// identical compilations a day for a value that changes on a human
+    /// timescale. Compiled scripts are reusable; only the execution has to
+    /// repeat.
+    ///
+    /// Confined to `queue`, which is serial, so the cache needs no lock of its
+    /// own — and `NSAppleScript` is not thread-safe anyway, which is the more
+    /// important reason every touch of it stays on that one queue.
+    nonisolated(unsafe) private static var compiled: [String: NSAppleScript] = [:]
+
+    /// Fetch or build the compiled form. Must be called on `queue`.
+    private static func script(for source: String) -> NSAppleScript? {
+        if let existing = compiled[source] { return existing }
+        guard let script = NSAppleScript(source: source) else { return nil }
+        // Compile eagerly so a syntax error surfaces here rather than being
+        // re-discovered on every execution.
+        var error: NSDictionary?
+        guard script.compileAndReturnError(&error) else { return nil }
+        compiled[source] = script
+        return script
+    }
+
     /// Whether an app is running, checked without touching AppleScript.
     ///
     /// This matters for more than speed: querying a *stopped* app through
@@ -24,7 +49,7 @@ enum AppleScriptRunner {
         await withCheckedContinuation { continuation in
             queue.async {
                 var error: NSDictionary?
-                let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
+                let result = script(for: source)?.executeAndReturnError(&error)
                 continuation.resume(returning: error == nil ? result?.stringValue : nil)
             }
         }
@@ -35,7 +60,7 @@ enum AppleScriptRunner {
         await withCheckedContinuation { continuation in
             queue.async {
                 var error: NSDictionary?
-                let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
+                let result = script(for: source)?.executeAndReturnError(&error)
                 continuation.resume(returning: error == nil ? result?.data : nil)
             }
         }
@@ -45,7 +70,7 @@ enum AppleScriptRunner {
     static func perform(_ source: String) {
         queue.async {
             var error: NSDictionary?
-            _ = NSAppleScript(source: source)?.executeAndReturnError(&error)
+            _ = script(for: source)?.executeAndReturnError(&error)
         }
     }
 }

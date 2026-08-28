@@ -138,10 +138,22 @@ public final class TimerProvider: SystemProvider {
         let now = Date()
 
         for timer in timers.values {
-            // Cancelled out from under us — someone ran `ledge end <id>`.
+            // The activity is the timer's FACE, not the timer.
+            //
+            // This used to read the other way round: a missing activity meant
+            // "someone cancelled it", so the timer was deleted. That made every
+            // route which merely clears the island — `ledge end-all`, the
+            // "Clear the Notch" shortcut, a script tidying up after itself —
+            // silently and permanently destroy a running alarm, with no
+            // confirmation and no notice until the moment it failed to ring.
+            //
+            // Cancelling is now something you have to actually ask for: the
+            // panel's Cancel button, the menu bar's Cancel items, or
+            // `ledge end <timer-id>`, which the server routes to real
+            // cancellation. Anything else that removes the activity just loses
+            // the face, and the next tick puts it back.
             if store.activities[timer.id] == nil, timer.fireDate > now {
-                timers.removeValue(forKey: timer.id)
-                persist()
+                present(timer)
                 continue
             }
             guard now >= timer.fireDate else { continue }

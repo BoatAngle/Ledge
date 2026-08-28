@@ -14,13 +14,20 @@ public final class ActivityStore {
 
     /// Whether the user has the panel open. Set by the renderer.
     public var isExpanded: Bool = false {
-        didSet { if isExpanded != oldValue { recompose() } }
+        didSet { if isExpanded != oldValue, !isRecomposing { recompose() } }
     }
 
     /// Which activity the user chose to expand. `nil` means "the primary".
     public var focusedActivityID: String? {
-        didSet { if focusedActivityID != oldValue { recompose() } }
+        didSet { if focusedActivityID != oldValue, !isRecomposing { recompose() } }
     }
+
+    /// Guards the two `didSet` hooks above while a pass is already running.
+    ///
+    /// `recompose` can decide the panel has to close — the activity it was
+    /// pinned to ended — and writing that decision back through the properties
+    /// would re-enter the very function making it. One pass, one answer.
+    private var isRecomposing = false
 
     /// The current resolved layout. Observing this is enough to render.
     private(set) public var composition: IslandComposition = .idle
@@ -38,9 +45,7 @@ public final class ActivityStore {
 
     private var reaper: Timer?
 
-    public init() {
-        startReaper()
-    }
+    public init() {}
 
     isolated deinit {
         reaper?.invalidate()
@@ -98,16 +103,28 @@ public final class ActivityStore {
     @discardableResult
     public func end(id: String) -> Bool {
         guard activities.removeValue(forKey: id) != nil else { return false }
-        if focusedActivityID == id { focusedActivityID = nil }
+        // The pin is deliberately NOT cleared here. Dropping it was what let
+        // the open panel re-target to whatever led the sort; `recompose` now
+        // sees a pin with nothing behind it and closes the panel instead.
         recompose()
         return true
     }
 
-    /// Ends everything posted by one source — how the CLI cleans up after a
-    /// script that died without calling `end`.
+    /// End everything, or everything from one source — also how the CLI cleans
+    /// up after a script that died without calling `end`.
+    ///
+    /// `includingModules` defaults to false, and that default is the whole
+    /// point: `ledge end-all` and the "Clear the Notch" shortcut are reflexes —
+    /// "get this off my screen" — and they were silently cancelling running
+    /// timers, which is not a display action but a destructive one. Clearing
+    /// the island now clears what scripts put there and leaves the modules to
+    /// their own state.
     @discardableResult
-    public func endAll(source: String? = nil) -> Int {
-        let doomed = activities.values.filter { source == nil || $0.source == source }
+    public func endAll(source: String? = nil, includingModules: Bool = false) -> Int {
+        let doomed = activities.values.filter { activity in
+            guard source == nil || activity.source == source else { return false }
+            return includingModules || !activity.isModuleOwned
+        }
         for activity in doomed { activities.removeValue(forKey: activity.id) }
         if !doomed.isEmpty { recompose() }
         return doomed.count
@@ -152,6 +169,12 @@ public final class ActivityStore {
     public static let transientDwell: TimeInterval = 1.6
 
     private func recompose() {
+        isRecomposing = true
+        defer { isRecomposing = false }
+        // Every mutation lands here, so this is the one place that always knows
+        // when the next expiry is. Re-arming from here means the reaper exists
+        // exactly when something is due and not one moment longer.
+        defer { scheduleReaper() }
         let now = Date()
         let live = activities.values
             .filter { !$0.isExpired(at: now) }
@@ -175,6 +198,29 @@ public final class ActivityStore {
         // makes a volume tap read as an interruption rather than a companion.
         let secondary = live.dropFirst().first { $0.kind == .ongoing }
 
+        // What the open panel is showing.
+        //
+        // When the user pinned something by opening it, that pin is absolute:
+        // if the thing ENDS — the download finishes, the timer is cancelled —
+        // the panel closes rather than quietly becoming a different activity
+        // under a cursor already on its way to a button. Falling back to
+        // `primary` here meant the buttons under your finger could belong to
+        // something else by the time you pressed one.
+        var expanded: Activity?
+        if isExpanded {
+            if let focusedActivityID {
+                expanded = live.first { $0.id == focusedActivityID }
+            } else {
+                // Opened without a pin (`ledge expand` with no id): whatever
+                // leads is the right answer.
+                expanded = primary
+            }
+            if expanded == nil {
+                isExpanded = false
+                focusedActivityID = nil
+            }
+        }
+
         let mode: IslandMode
         if isExpanded {
             mode = .expanded
@@ -183,10 +229,6 @@ public final class ActivityStore {
         } else {
             mode = .compact
         }
-
-        let expanded: Activity? = isExpanded
-            ? (focusedActivityID.flatMap { id in live.first { $0.id == id } } ?? primary)
-            : nil
 
         composition = IslandComposition(
             primary: primary,
@@ -206,12 +248,33 @@ public final class ActivityStore {
 
     // MARK: - Expiry
 
-    private func startReaper() {
-        // 4 Hz is plenty: transients live for well over a second, and this
-        // costs nothing while idle.
-        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+    /// Arm a single timer for the next expiry, if there is one.
+    ///
+    /// This used to be a 4 Hz repeating timer, running for the life of the
+    /// process. The comment said it "costs nothing while idle", and per tick
+    /// that is nearly true — but it also meant the app woke the main thread
+    /// four times a second, forever, to look at an empty dictionary. Nothing
+    /// expires unpredictably: every `expiresAt` is known the moment it is set,
+    /// so the right shape is one timer aimed at the earliest of them, re-armed
+    /// whenever the set changes.
+    ///
+    /// A dwell measured in seconds tolerates 50ms of slack easily, and the
+    /// tolerance lets the kernel fold this wakeup in with someone else's.
+    private func scheduleReaper() {
+        reaper?.invalidate()
+        reaper = nil
+
+        let now = Date()
+        guard let next = activities.values.compactMap(\.expiresAt).min() else { return }
+
+        let timer = Timer(
+            timeInterval: max(0.05, next.timeIntervalSince(now)),
+            repeats: false
+        ) { [weak self] _ in
             MainActor.assumeIsolated { self?.reap() }
         }
+        timer.tolerance = 0.05
+        // `.common` so a HUD still retires while a menu is open.
         RunLoop.main.add(timer, forMode: .common)
         reaper = timer
     }
@@ -219,7 +282,12 @@ public final class ActivityStore {
     private func reap() {
         let now = Date()
         let expired = activities.values.filter { $0.isExpired(at: now) }
-        guard !expired.isEmpty else { return }
+        guard !expired.isEmpty else {
+            // Fired early (timer slack, a clock adjustment). Re-arm rather than
+            // dropping the expiry on the floor.
+            scheduleReaper()
+            return
+        }
         for activity in expired { activities.removeValue(forKey: activity.id) }
         recompose()
     }

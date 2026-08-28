@@ -54,6 +54,7 @@ public final class CalendarProvider: SystemProvider {
     private var isAuthorized = false
     private var shownEventID: String?
     private var actionObserver: NSObjectProtocol?
+    private var storeChangeObserver: NSObjectProtocol?
     private var joinURL: URL?
     /// 20 seconds is plenty — the countdown itself animates locally, so this
     /// only decides when we notice a *different* meeting is now next.
@@ -97,7 +98,12 @@ public final class CalendarProvider: SystemProvider {
 
         // EventKit tells us when anything changes, which catches a meeting
         // moved five minutes before it starts.
-        NotificationCenter.default.addObserver(
+        // Keep the TOKEN. `removeObserver(self, name:object:)` only unregisters
+        // selector-based observers; a block registered with
+        // `addObserver(forName:object:queue:using:)` is owned by the returned
+        // token and survives it. Every module toggle restarts every provider,
+        // so discarding this leaked one more EventKit observer each time.
+        storeChangeObserver = NotificationCenter.default.addObserver(
             forName: .EKEventStoreChanged,
             object: eventStore,
             queue: .main
@@ -110,7 +116,10 @@ public final class CalendarProvider: SystemProvider {
         poller.stop()
         if let actionObserver { NotificationCenter.default.removeObserver(actionObserver) }
         actionObserver = nil
-        NotificationCenter.default.removeObserver(self, name: .EKEventStoreChanged, object: eventStore)
+        if let storeChangeObserver {
+            NotificationCenter.default.removeObserver(storeChangeObserver)
+        }
+        storeChangeObserver = nil
         store?.end(id: identifier)
         store = nil
     }

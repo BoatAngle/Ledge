@@ -46,3 +46,32 @@ final class WeatherCodeTests: XCTestCase {
         }
     }
 }
+
+/// The place name now comes out of Open-Meteo's own reply — the timezone it
+/// resolves from `timezone=auto` — rather than from a second round trip to
+/// Apple's geocoder that the privacy disclosure never mentioned.
+final class PlaceNameFromTimezoneTests: XCTestCase {
+    func testUnderscoresBecomeSpaces() {
+        XCTAssertEqual(WeatherService.placeName(fromTimezone: "America/Los_Angeles"), "Los Angeles")
+        XCTAssertEqual(WeatherService.placeName(fromTimezone: "Europe/London"), "London")
+    }
+
+    func testThreeComponentZonesTakeTheLast() {
+        XCTAssertEqual(
+            WeatherService.placeName(fromTimezone: "America/Argentina/Buenos_Aires"),
+            "Buenos Aires"
+        )
+    }
+
+    func testZonesThatNameNoPlaceReturnNothing() {
+        // Better an absent subtitle than one reading "UTC".
+        for zone in ["UTC", "GMT", "Etc/GMT+5", "Etc/UTC"] {
+            XCTAssertNil(WeatherService.placeName(fromTimezone: zone), zone)
+        }
+    }
+
+    func testMissingOrEmptyIsNil() {
+        XCTAssertNil(WeatherService.placeName(fromTimezone: nil))
+        XCTAssertNil(WeatherService.placeName(fromTimezone: ""))
+    }
+}

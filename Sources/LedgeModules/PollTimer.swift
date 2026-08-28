@@ -44,6 +44,15 @@ final class PollTimer {
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+        // Let the system coalesce our wakeups with everyone else's.
+        //
+        // Nine pollers each demanding to be woken on their own exact schedule
+        // is nine separate trips out of idle; a tolerance lets the kernel line
+        // them up and take one. Apple's own guidance is 10% of the interval,
+        // and none of these readings is time-critical to the millisecond — the
+        // weather can be ninety seconds late, and nobody can see a brightness
+        // HUD arrive 10ms early.
+        timer.tolerance = interval * 0.1
         // `.common` so the island keeps updating while a menu is open or a
         // window is being resized.
         RunLoop.main.add(timer, forMode: .common)

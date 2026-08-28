@@ -178,7 +178,6 @@ public final class WeatherProvider: SystemProvider {
 
         guard let location = await resolver.currentLocation() else { return coordinate }
         coordinate = location.coordinate
-        placeName = await LocationResolver.placeName(for: location)
         return location.coordinate
     }
 

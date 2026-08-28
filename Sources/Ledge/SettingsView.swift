@@ -127,12 +127,31 @@ struct GeneralSettings: View {
             Section("Interaction") {
                 Toggle("Expand when the pointer rests on the island", isOn: $settings.expandOnHover)
 
-                Slider(value: hoverDelay, in: 0...800) {
+                // The floor is 120ms, not zero.
+                //
+                // Zero means the panel opens the instant the pointer crosses
+                // the island, which turns the whole resting-pointer design into
+                // a tripwire: every trip to the menu bar becomes a 468pt panel
+                // in the way. 120ms is short enough to feel immediate and long
+                // enough that a pointer in transit is gone before it fires.
+                Slider(value: hoverDelay, in: 120...800) {
                     Text("Delay")
                 } minimumValueLabel: {
                     Text("Short")
                 } maximumValueLabel: {
                     Text("Long")
+                }
+                .disabled(!settings.expandOnHover)
+
+                // The value itself, spelled out. This is the single most
+                // consequential number in the app's behaviour and the slider
+                // gave no way to know where it sat, let alone return to it.
+                LabeledContent("Rest for") {
+                    Text(delayDescription)
+                        .monospacedDigit()
+                        .foregroundStyle(settings.expandOnHover ? .secondary : .tertiary)
+                        .contentTransition(.numericText())
+                        .animation(.smooth(duration: 0.2), value: settings.hoverDelay)
                 }
                 .disabled(!settings.expandOnHover)
 
@@ -147,7 +166,7 @@ struct GeneralSettings: View {
             } header: {
                 Text("Displays")
             } footer: {
-                SettingsFooter("Applies to external displays and Macs without a camera housing. Takes effect the next time Ledge opens.")
+                SettingsFooter("Applies to external displays and Macs without a camera housing, where the island is drawn rather than hugging real hardware.")
             }
 
             Section {
@@ -213,9 +232,21 @@ struct GeneralSettings: View {
     /// (Key Repeat, Double-Click Speed) never do.
     private var hoverDelay: Binding<Double> {
         Binding(
-            get: { settings.hoverDelay },
+            // Clamped on read as well as write: values from an older build (or
+            // from `defaults write`) can sit below the floor, and a slider
+            // whose value is outside its own range renders pinned at the end
+            // and silently rewrites itself on first touch.
+            get: { max(120, min(800, settings.hoverDelay)) },
             set: { settings.hoverDelay = ($0 / 20).rounded() * 20 }
         )
+    }
+
+    /// The delay in the units a person would say it in.
+    private var delayDescription: String {
+        let ms = Int(hoverDelay.wrappedValue.rounded())
+        // Under a second reads better in milliseconds; at and above it, the
+        // decimal second is what people actually mean.
+        return ms < 1000 ? "\(ms) ms" : String(format: "%.1f s", Double(ms) / 1000)
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
@@ -580,7 +611,7 @@ struct WeatherSettings: View {
             } header: {
                 Text("Location")
             } footer: {
-                SettingsFooter("Your coordinates are sent to Open-Meteo to look up conditions, and nowhere else.")
+                SettingsFooter("Your coordinates are rounded to about a kilometre and sent to Open-Meteo to look up conditions, and nowhere else. The place name comes back in the same reply.")
             }
             .disabled(settings.weatherMode == .off)
 
@@ -639,7 +670,14 @@ struct WeatherSettings: View {
 
 struct AboutSettings: View {
     var cliPath: String
+    @Bindable var settings: LedgeSettings
+    /// Runs the check and records its result. Owned by the app delegate, which
+    /// is where the version and the settings write live.
+    var onCheckForUpdates: () async -> UpdateChecker.Result
+
     @State private var copied = false
+    @State private var isChecking = false
+    @State private var updateResult: UpdateChecker.Result?
 
     private var version: String? {
         guard let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -745,12 +783,87 @@ struct AboutSettings: View {
             }
 
             Section {
+                Toggle("Check for updates", isOn: $settings.checksForUpdates)
+
+                LabeledContent("Status") {
+                    HStack(spacing: 8) {
+                        if isChecking {
+                            ProgressView().controlSize(.small)
+                        }
+                        updateStatus
+                    }
+                }
+
+                if case .updateAvailable(_, let url) = updateResult {
+                    Link("See What's New", destination: url)
+                }
+
+                Button("Check Now") { check() }
+                    .disabled(isChecking || !settings.checksForUpdates)
+            } header: {
+                Text("Updates")
+            } footer: {
+                // Exactly what leaves the machine, in plain words. This is the
+                // app's only outbound request besides weather, and an app whose
+                // whole premise is being trustworthy should say so rather than
+                // let someone find it in a packet trace.
+                SettingsFooter(
+                    """
+                    Once a day, Ledge asks GitHub whether a newer release exists. \
+                    The request carries no account, no identifier, and nothing about \
+                    you or your Mac — it's the same public page anyone can open in a \
+                    browser. Turn this off and no request is made.
+                    """
+                )
+            }
+
+            Section {
                 Link("GitHub", destination: Self.repoURL)
                 Link("Report an Issue", destination: Self.repoURL.appendingPathComponent("issues"))
             }
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 560)
+        .frame(width: 540, height: 700)
+    }
+
+    @ViewBuilder
+    private var updateStatus: some View {
+        switch updateResult {
+        case .updateAvailable(let version, _):
+            Text("\(version) is available")
+                .foregroundStyle(Color.accentColor)
+        case .upToDate:
+            Text("Up to date")
+                .foregroundStyle(.secondary)
+        case .failed(let reason):
+            // Named, not swallowed. "Check Now" that silently returns you to
+            // the same row teaches that the button is decoration.
+            Text(reason)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .truncationMode(.tail)
+        case nil:
+            // No check in *this* window session — fall back to what the last
+            // one recorded. "Not checked yet" and "up to date" are genuinely
+            // different states and must not share a label: one means the app
+            // has looked and found nothing, the other means it hasn't looked.
+            if let available = settings.availableUpdate {
+                Text("\(available) is available").foregroundStyle(Color.accentColor)
+            } else if let last = settings.lastUpdateCheck {
+                Text("Up to date — checked \(last.formatted(.relative(presentation: .named)))")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Not checked yet").foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func check() {
+        isChecking = true
+        Task { @MainActor in
+            updateResult = await onCheckForUpdates()
+            isChecking = false
+        }
     }
 
     private static let repoURL = URL(string: "https://github.com/BoatAngle/Ledge")!

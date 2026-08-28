@@ -220,6 +220,48 @@ public struct ActivityContent: Codable, Hashable, Sendable {
         body != nil || !details.isEmpty || !actions.isEmpty || progress != nil || subtitle != nil
     }
 
+    /// What this activity *says*, for VoiceOver.
+    ///
+    /// The island is glyphs and a number: unlabelled, it is invisible to
+    /// VoiceOver even when the panel is reachable. This assembles the same
+    /// information a sighted user reads off the compact strip into one
+    /// sentence, in the order the eye takes it.
+    ///
+    /// Lives in Core rather than in the view because it is pure text
+    /// derivation with real edge cases (a percentage that is already spoken by
+    /// the title, an indeterminate progress bar), and those deserve tests.
+    public var spokenSummary: String {
+        var parts: [String] = [title]
+        if let subtitle, !subtitle.isEmpty { parts.append(subtitle) }
+
+        // The trailing readout is the one thing a sighted user gets for free
+        // from the closed island, so it must survive into speech — unless the
+        // title already contains it verbatim, which would stutter.
+        if let trailingText, !trailingText.isEmpty,
+           !title.localizedCaseInsensitiveContains(trailingText) {
+            parts.append(trailingText)
+        }
+
+        if let progress {
+            if let fraction = progress.fraction {
+                parts.append("\(Int((fraction * 100).rounded())) percent")
+            } else if let label = progress.label, !label.isEmpty {
+                parts.append(label)
+            } else {
+                parts.append("in progress")
+            }
+        }
+
+        // Deduplicate: a module that puts the same string in two slots (the
+        // weather module's condition, say) shouldn't say it twice.
+        var seen = Set<String>()
+        let unique = parts.filter { part in
+            let key = part.lowercased()
+            return seen.insert(key).inserted
+        }
+        return unique.joined(separator: ", ")
+    }
+
     /// Hand-written decoding.
     ///
     /// The synthesized initialiser insists on `details` and `actions` being

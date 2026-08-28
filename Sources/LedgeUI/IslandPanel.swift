@@ -72,20 +72,24 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     // instead of the app you were aiming at.
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard !urls(from: sender).isEmpty, dragIsOverIsland(sender) else { return [] }
-        shelf?.dragEntered()
+        let incoming = urls(from: sender)
+        guard !incoming.isEmpty, dragIsOverIsland(sender) else { return [] }
+        // The pasteboard is already read to decide whether to accept; passing
+        // the count on costs nothing and lets the island say how many.
+        shelf?.dragEntered(count: incoming.count)
         // `.copy` because the shelf only ever references files — it never
         // moves or deletes what you drop on it.
         return .copy
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard !urls(from: sender).isEmpty else { return [] }
+        let incoming = urls(from: sender)
+        guard !incoming.isEmpty else { return [] }
         guard dragIsOverIsland(sender) else {
             shelf?.dragExited()
             return []
         }
-        shelf?.dragEntered()
+        shelf?.dragEntered(count: incoming.count)
         shelf?.dragUpdated()
         return .copy
     }
@@ -206,6 +210,14 @@ public final class IslandWindowController {
     private var hostingView: PassthroughHostingView<IslandHostView>?
     public let shelf = DropShelf()
     private var outsideClickMonitor: Any?
+    /// Tokens for the two block-based notification observers.
+    ///
+    /// `removeObserver(self)` does nothing for blocks registered with
+    /// `addObserver(forName:object:queue:using:)` — they are owned by the token
+    /// the call returns. Without these, a hide/show cycle left the old
+    /// observers registered and added a second set, so one screen change
+    /// rebuilt the panel twice.
+    private var notificationObservers: [NSObjectProtocol] = []
     private let store: ActivityStore
     private let settings: LedgeSettings
     private var metrics: IslandMetrics
@@ -226,7 +238,8 @@ public final class IslandWindowController {
         shelf.attach(to: store)
         rebuild()
         observeScreenChanges()
-        observeOutsideClicks()
+        observeDisplayPreference()
+        observePanelState()
     }
 
     public func hide() {
@@ -234,11 +247,11 @@ public final class IslandWindowController {
         panel?.orderOut(nil)
         panel = nil
         hostingView = nil
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
+        setOutsideClickMonitor(active: false)
+        for observer in notificationObservers {
+            NotificationCenter.default.removeObserver(observer)
         }
-        NotificationCenter.default.removeObserver(self)
+        notificationObservers.removeAll()
     }
 
     /// True on displays with real hardware to hug.
@@ -246,8 +259,32 @@ public final class IslandWindowController {
 
     // MARK: - Construction
 
+    /// Whether the island belongs on screen at all right now.
+    ///
+    /// On a Mac with a camera housing this is always true. On everything else
+    /// — an external display, a Mac mini, an older MacBook — the island is a
+    /// drawn rectangle floating under the menu bar, which is a taste some
+    /// people don't share. `showOnNotchlessDisplays` is their answer, and until
+    /// now it was a switch wired to nothing: stored, restored, described in the
+    /// Settings window, and never once read.
+    private func shouldShowIsland(on screen: NSScreen) -> Bool {
+        screen.hasNotch || settings.showOnNotchlessDisplays
+    }
+
     private func rebuild() {
         guard let screen = NSScreen.islandHost else { return }
+
+        guard shouldShowIsland(on: screen) else {
+            // Take it down, but keep the controller live: plugging the laptop's
+            // own display back in has to bring the island straight back, and
+            // the shelf must keep its files across the trip.
+            panel?.orderOut(nil)
+            panel = nil
+            hostingView = nil
+            metrics = screen.ledgeMetrics
+            return
+        }
+
         metrics = screen.ledgeMetrics
 
         let panelSize = CGSize(
@@ -316,7 +353,7 @@ public final class IslandWindowController {
     // MARK: - Environment changes
 
     private func observeScreenChanges() {
-        NotificationCenter.default.addObserver(
+        notificationObservers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: .main
@@ -327,12 +364,42 @@ public final class IslandWindowController {
                 // trying to patch the existing frame.
                 self?.rebuild()
             }
-        }
+        })
+    }
+
+    /// React to the notchless-display preference the moment it is flipped.
+    ///
+    /// The Settings footer used to promise this took effect "the next time
+    /// Ledge opens". It doesn't have to: rebuilding is cheap, and a toggle in
+    /// front of you that visibly does the thing is worth more than a sentence
+    /// explaining why it hasn't yet.
+    private func observeDisplayPreference() {
+        notificationObservers.append(NotificationCenter.default.addObserver(
+            forName: .ledgeDisplayPreferenceChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.rebuild() }
+        })
     }
 
     /// Collapse when the user clicks anywhere else — the panel's click-through
     /// region means those clicks never reach us otherwise.
-    private func observeOutsideClicks() {
+    ///
+    /// Installed only while the panel is actually open. A global event monitor
+    /// is woken for every mouse-down anywhere on the machine, and this one used
+    /// to live for the whole session in order to answer "is the panel open?"
+    /// with "no" — for hours at a time, on every click the user makes in every
+    /// other app. Now it exists for the seconds the panel does.
+    private func setOutsideClickMonitor(active: Bool) {
+        guard active != (outsideClickMonitor != nil) else { return }
+
+        guard active else {
+            if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+            outsideClickMonitor = nil
+            return
+        }
+
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown]
         ) { [weak self] _ in
@@ -342,6 +409,24 @@ public final class IslandWindowController {
                     self.store.isExpanded = false
                     self.store.focusedActivityID = nil
                 }
+            }
+        }
+    }
+
+    /// Keep the monitor's lifetime tied to the panel's open state.
+    ///
+    /// `withObservationTracking` rather than a notification: `isExpanded` is
+    /// already `@Observable` and this needs no new plumbing. The callback
+    /// re-registers, which is how a one-shot observation becomes a standing
+    /// one.
+    private func observePanelState() {
+        withObservationTracking {
+            _ = store.isExpanded
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.setOutsideClickMonitor(active: self.store.isExpanded)
+                self.observePanelState()
             }
         }
     }

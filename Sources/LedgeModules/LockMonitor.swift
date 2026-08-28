@@ -10,7 +10,24 @@ import Foundation
 /// back.
 @MainActor
 public final class LockMonitor {
-    public private(set) var isLocked = false
+    /// The two reasons to stand down are tracked SEPARATELY, and either one is
+    /// enough.
+    ///
+    /// A single Bool looks like it works and doesn't: lock the Mac, let the
+    /// display sleep, then nudge the mouse. The display wakes to the lock
+    /// screen and posts `screensDidWake`, which cleared the one flag and
+    /// resumed every poller — brightness at 10 Hz, downloads scanning the
+    /// folder — for a machine the user isn't even signed into. Two flags, one
+    /// derived answer.
+    private var screenLocked = false
+    private var screensAsleep = false
+
+    /// True while either condition holds.
+    public var isLocked: Bool { screenLocked || screensAsleep }
+
+    /// What the last callback reported, so a change that doesn't move the
+    /// derived value stays silent.
+    private var lastReported = false
 
     private var observers: [NSObjectProtocol] = []
     private let onChange: @MainActor (Bool) -> Void
@@ -29,7 +46,7 @@ public final class LockMonitor {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.set(true) }
+                MainActor.assumeIsolated { self?.setLocked(true) }
             }
         )
         observers.append(
@@ -38,7 +55,7 @@ public final class LockMonitor {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.set(false) }
+                MainActor.assumeIsolated { self?.setLocked(false) }
             }
         )
 
@@ -50,7 +67,7 @@ public final class LockMonitor {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.set(true) }
+                MainActor.assumeIsolated { self?.setScreensAsleep(true) }
             }
         )
         observers.append(
@@ -59,7 +76,7 @@ public final class LockMonitor {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.set(false) }
+                MainActor.assumeIsolated { self?.setScreensAsleep(false) }
             }
         )
     }
@@ -74,9 +91,20 @@ public final class LockMonitor {
         observers.removeAll()
     }
 
-    private func set(_ locked: Bool) {
-        guard locked != isLocked else { return }
-        isLocked = locked
-        onChange(locked)
+    private func setLocked(_ locked: Bool) {
+        screenLocked = locked
+        publish()
+    }
+
+    private func setScreensAsleep(_ asleep: Bool) {
+        screensAsleep = asleep
+        publish()
+    }
+
+    private func publish() {
+        let suspended = isLocked
+        guard suspended != lastReported else { return }
+        lastReported = suspended
+        onChange(suspended)
     }
 }

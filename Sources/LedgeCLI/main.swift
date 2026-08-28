@@ -80,8 +80,15 @@ func end() throws {
 }
 
 func endAll() throws {
+    // Modules are spared unless asked for. `end-all` reads as "clear the
+    // island", and a reflex to tidy the screen should not cancel the timer
+    // you have running.
     let response = try client.send(
-        LedgeRequest(command: .endAll, source: parsed.string("source"))
+        LedgeRequest(
+            command: .endAll,
+            source: parsed.string("source"),
+            includeModules: parsed.switches.contains("include-modules")
+        )
     )
     let count = response.count ?? 0
     emit(["ended": count], plain: "\(count)")
@@ -361,7 +368,7 @@ func printUsage() {
       flash        Post a transient activity that retires itself.
       update <id>  Change an existing activity's content.
       end <id>     Remove an activity.
-      end-all      Remove everything (optionally --source <name>).
+      end-all      Clear activities posted by scripts (--source, --include-modules).
       list         Show what's currently on the island.
       run -- <cmd> Run a command, showing progress; reports success or failure.
       timer <dur>  Start a countdown that rings. 25m, 90s, 1h30m, or 25:00.
@@ -392,6 +399,8 @@ func printUsage() {
     BEHAVIOR
       --id <id>                 Reuse an id to update in place.
       --source <name>           Group activities for `end-all --source`.
+      --include-modules         Let `end-all` also clear built-in modules
+                                (a running timer, what is playing).
       --priority <level>        background | low | normal | high | critical
       --dwell <seconds>         How long a flash stays up.
       --stdin                   Read a full activity as JSON from stdin.

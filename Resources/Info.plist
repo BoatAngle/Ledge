@@ -19,9 +19,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.0</string>
+	<string>0.3.0</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<!-- Menu-bar only: no Dock icon, no app switcher entry. -->
@@ -40,7 +40,7 @@
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>Ledge watches your Downloads folder for in-progress downloads so it can show their progress in the notch.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Ledge uses your location only to look up local weather. The coordinates go to Open-Meteo and nowhere else, and you can set a location manually in Settings instead.</string>
+	<string>Ledge uses your location only to look up local weather. The coordinates are rounded to about a kilometre and go to Open-Meteo and nowhere else, and you can set a location manually in Settings instead.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT licensed. Copyright © 2026 Harrison Braun.</string>
 </dict>

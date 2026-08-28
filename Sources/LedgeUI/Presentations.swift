@@ -49,7 +49,15 @@ public struct CompactLeadingView: View {
             case .media:
                 Artwork(icon: activity.content.icon, size: glyph + 3, cornerRadius: 5)
             case .privacy:
-                PrivacyDot(tint: style.accentColor, size: glyph * 0.46)
+                // The provider sets a trailing symbol only when a second
+                // device is live; that is the signal for the second dot.
+                PrivacyDot(
+                    tint: style.accentColor,
+                    size: glyph * 0.46,
+                    secondaryTint: activity.content.trailingIcon == nil
+                        ? nil
+                        : Color(LedgeColor.orange)
+                )
             case .some, .none:
                 ActivityIconView(
                     icon: activity.content.icon,
@@ -90,7 +98,12 @@ public struct CompactTrailingView: View {
         let content = activity.content
         let metric = 12 * style.scale
         Group {
-            if activity.nativeView == .media {
+            if activity.nativeView == .privacy {
+                // The leading mark already carries the whole state, including
+                // the second dot. Repeating the microphone as a 20pt glyph on
+                // the trailing side would make one fact look like two.
+                BreathingDot(tint: style.accentColor, size: 7 * style.scale)
+            } else if activity.nativeView == .media {
                 WaveformView(
                     color: style.accentColor,
                     isAnimating: true,
@@ -214,8 +227,22 @@ public struct ExpandedView: View {
             header(content)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if activity.openURL != nil { onOpen() }
+                    // The header is opaque to hit-testing, so a tap here never
+                    // reaches the background's dismiss gesture. When there is
+                    // no app to open — a timer, a shell script's activity, most
+                    // of the system modules — that used to mean the most
+                    // clickable-looking row on the panel simply ate the click.
+                    // Nothing is not an acceptable answer to a click.
+                    if activity.openURL != nil { onOpen() } else { onDismiss() }
                 }
+                // The header is one thing that says one sentence — and, when
+                // there's an app behind it, one thing you can activate.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(content.spokenSummary))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(
+                    activity.openURL != nil ? Text("Opens the app") : Text("Closes the panel")
+                )
 
             if let body = content.body {
                 Text(body)
@@ -234,6 +261,16 @@ public struct ExpandedView: View {
                             .foregroundStyle(IslandDesign.Ink.tertiary)
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(progress.label ?? "Progress"))
+                // A determinate bar reports a percentage; an indeterminate one
+                // says so rather than reporting a meaningless zero.
+                .accessibilityValue(
+                    Text(
+                        progress.fraction.map { "\(Int(($0 * 100).rounded())) percent" }
+                            ?? "In progress"
+                    )
+                )
             }
 
             if !content.details.isEmpty {
@@ -448,6 +485,12 @@ public struct ExpandedView: View {
                         .truncationMode(.middle)
                 }
                 .padding(.vertical, theme.detailStyle == .plain ? 3.5 : IslandDesign.space(1.25))
+                // One element per row, label and value paired the way the eye
+                // reads them. Left to itself VoiceOver walks the two Texts
+                // separately, which turns a table into a list of orphans.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(detail.label))
+                .accessibilityValue(Text(detail.value))
             }
         }
         .padding(.horizontal, theme.detailStyle == .plain ? 0 : IslandDesign.space(2.5))
@@ -575,9 +618,16 @@ public struct ExpandedView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // A 5pt capsule has no name. Without this VoiceOver reads
+                // "button" four times and the user has no way to tell which
+                // activity each one leads to.
+                .accessibilityLabel(Text(sibling.content.title))
+                .accessibilityAddTraits(isCurrent ? [.isSelected, .isButton] : .isButton)
             }
             Spacer(minLength: 0)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Activities"))
         .animation(IslandMotion.content, value: activity.id)
     }
 }
@@ -622,29 +672,63 @@ struct BreathingDot: View {
     var size: CGFloat = 7
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            let phase = (sin(t * 2.2) + 1) / 2
-            Circle()
-                .fill(tint)
-                .frame(width: size, height: size)
-                .scaleEffect(0.84 + 0.16 * phase)
-                .opacity(0.62 + 0.38 * phase)
-                .glyphGlow(tint, radius: size * 0.7, intensity: 0.55)
+        // Reduce Motion stops the breath and the 24fps timeline that drives
+        // it. The dot still means "this is live"; it just says so by being
+        // there rather than by moving — and the island stops asking the GPU
+        // for a frame 24 times a second to animate a 7pt circle.
+        if IslandAccessibility.shared.reduceMotion {
+            dot(phase: 1)
+                .frame(width: size + 5, height: size + 5)
+        } else {
+            TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                dot(phase: (sin(t * 2.2) + 1) / 2)
+            }
+            .frame(width: size + 5, height: size + 5)
         }
-        .frame(width: size + 5, height: size + 5)
     }
-}
 
-struct PrivacyDot: View {
-    var tint: Color
-    var size: CGFloat
-
-    var body: some View {
+    private func dot(phase: Double) -> some View {
         Circle()
             .fill(tint)
             .frame(width: size, height: size)
-            .shadow(color: tint.opacity(0.9), radius: size * 0.55)
+            .scaleEffect(0.84 + 0.16 * phase)
+            .opacity(0.62 + 0.38 * phase)
+            .glyphGlow(tint, radius: size * 0.7, intensity: 0.55)
+    }
+}
+
+/// The camera / microphone in-use mark.
+///
+/// macOS's own convention, kept deliberately: **green means the camera is on,
+/// orange means the microphone is.** When both are live the mark becomes two
+/// dots, the way Control Centre shows it — a difference in *shape*, so the
+/// three states are distinguishable to someone who can't separate the two hues,
+/// and at the 5pt the compact slot allows.
+struct PrivacyDot: View {
+    var tint: Color
+    var size: CGFloat
+    /// Set only when a second device is also in use.
+    var secondaryTint: Color?
+
+    init(tint: Color, size: CGFloat, secondaryTint: Color? = nil) {
+        self.tint = tint
+        self.size = size
+        self.secondaryTint = secondaryTint
+    }
+
+    var body: some View {
+        HStack(spacing: size * 0.5) {
+            dot(tint)
+            if let secondaryTint { dot(secondaryTint) }
+        }
+    }
+
+    private func dot(_ color: Color) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .shadow(color: color.opacity(0.9), radius: size * 0.55)
     }
 }
 

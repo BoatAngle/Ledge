@@ -83,8 +83,15 @@ public struct WaveformView: View {
         self.size = size
     }
 
+    /// Reduce Motion freezes the bars at their resting height. The waveform
+    /// says "audio is playing", and a static equaliser still says it — the
+    /// dancing is decoration, and it is 30 frames a second of it.
+    private var animates: Bool {
+        isAnimating && !IslandAccessibility.shared.reduceMotion
+    }
+
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isAnimating)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !animates)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             HStack(alignment: .center, spacing: 2) {
                 ForEach(0..<barCount, id: \.self) { index in
@@ -98,7 +105,7 @@ public struct WaveformView: View {
     }
 
     private func height(index: Int, t: Double) -> CGFloat {
-        guard isAnimating else { return size.height * 0.28 }
+        guard animates else { return size.height * 0.28 }
         // Irrational-ish per-bar phase offsets keep the bars from marching in
         // lockstep, which is what makes it read as audio rather than a loader.
         let phase = t * 5.4 + Double(index) * 1.37

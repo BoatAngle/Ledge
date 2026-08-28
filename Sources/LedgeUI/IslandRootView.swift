@@ -48,6 +48,10 @@ public struct IslandRootView: View {
 
     private var theme: IslandTheme { .preset(settings.theme) }
 
+    /// Read inside `body`, so `@Observable` re-renders the island the moment
+    /// the user changes a setting in System Settings — no relaunch.
+    private var access: IslandAccessibility { .shared }
+
     /// Colour and size for an activity, after the user's per-module overrides.
     private func style(for activity: Activity?) -> ActivityStyle {
         // Read the revision so `@Observable` registers a dependency: the
@@ -155,8 +159,17 @@ public struct IslandRootView: View {
                 )
                     .offset(x: fillet + leadingReserve + minimalFrame.minX, y: minimalFrame.minY)
                     // Scale stays — the circle births out of the metaball
-                    // merge — but the fade softens into a blur.
-                    .transition(ScaleTransition(0.3).combined(with: BlurReplaceTransition(configuration: .downUp)))
+                    // merge — but the fade softens into a blur. Under Reduce
+                    // Motion the birth becomes a plain fade: with the goo
+                    // already zeroed there is no merge left for it to sell.
+                    .transition(
+                        access.reduceMotion
+                            ? .opacity
+                            : AnyTransition(
+                                ScaleTransition(0.3)
+                                    .combined(with: BlurReplaceTransition(configuration: .downUp))
+                            )
+                    )
             }
         }
         .frame(width: footprint.width, height: footprint.height, alignment: .topLeading)
@@ -167,8 +180,11 @@ public struct IslandRootView: View {
         } keyframes: { _ in
             // A flat 1.0 → 1.0 track when arrivals are muted — and while the
             // panel is open: bouncing 468pt of content someone is reading is
-            // not a nudge, it's a shove.
-            let peak = settings.animateArrivals && mode != .expanded ? 1.045 : 1.0
+            // not a nudge, it's a shove. Reduce Motion flattens it too: a
+            // bounce is pure movement carrying no information.
+            let peak = settings.animateArrivals && mode != .expanded && !access.reduceMotion
+                ? 1.045
+                : 1.0
             KeyframeTrack(\.self) {
                 SpringKeyframe(peak, duration: 0.14, spring: Spring(response: 0.28, dampingRatio: 0.85))
                 SpringKeyframe(1.0, duration: 0.50, spring: Spring(response: 0.40, dampingRatio: 0.60))
@@ -205,7 +221,45 @@ public struct IslandRootView: View {
             guard height > 0 else { return }
             measuredPanelHeight = height
         }
+        .onChange(of: store.lastArrivalID) { _, new in
+            announceArrival(new)
+        }
+        // Reading the observable here is what makes Increase Contrast take
+        // effect live: `IslandDesign.Ink` consults a nonisolated mirror that
+        // SwiftUI can't observe, so the island subscribes on its behalf — and
+        // gets to ease the ramp across rather than snapping it.
+        .animation(IslandMotion.content, value: access.increaseContrast)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Ledge"))
+        .accessibilityValue(Text(accessibilitySummary))
         .islandTheme(theme)
+    }
+
+    // MARK: VoiceOver
+
+    /// What the island as a whole currently says.
+    private var accessibilitySummary: String {
+        guard let primary = composition.primary else { return "Nothing on the island" }
+        var summary = primary.content.spokenSummary
+        if let secondary = composition.secondary {
+            summary += ". Also \(secondary.content.spokenSummary)"
+        }
+        return summary
+    }
+
+    /// Speak an arriving activity.
+    ///
+    /// The island is a `nonactivating` panel that never becomes key, so a
+    /// VoiceOver user cannot land on it and read it: without an announcement, a
+    /// meeting starting or a download finishing is a purely visual event.
+    ///
+    /// Only *ongoing* arrivals reach here — `lastArrivalID` is ongoing-only by
+    /// design — which is exactly right: volume and brightness HUDs mirror
+    /// changes VoiceOver already announces itself, and repeating them would
+    /// turn every key press into a double utterance.
+    private func announceArrival(_ id: String?) {
+        guard let id, let activity = store.activities[id] else { return }
+        access.announce(activity.content.spokenSummary)
     }
 
     // MARK: Content per mode
@@ -223,14 +277,23 @@ public struct IslandRootView: View {
                 if let activity = composition.expandedActivity,
                    activity.nativeView == .dropZone, let shelf, !shelf.files.isEmpty {
                     DropShelfView(shelf: shelf)
-                        .transition(Self.panelTransition)
+                        .transition(panelTransition)
                 } else if let activity = composition.expandedActivity {
                     ExpandedView(
                         activity: activity,
                         // Ongoing only: a transient's dot would pop in, shove
                         // the row, and expire under the click — the dots
                         // extend the content-pinning invariant.
-                        siblings: composition.all.filter { $0.kind == .ongoing },
+                        //
+                        // Ordered by when each ARRIVED, not by priority.
+                        // `composition.all` is priority-sorted and re-sorts
+                        // whenever anything changes — a download ticking its
+                        // progress could reorder the row between the moment you
+                        // aimed at the third dot and the moment you hit it.
+                        // Arrival order never changes while you look at it.
+                        siblings: composition.all
+                            .filter { $0.kind == .ongoing }
+                            .sorted { $0.createdAt < $1.createdAt },
                         style: style(for: activity),
                         onSelect: { store.focusedActivityID = $0 },
                         onAction: { perform($0) },
@@ -245,7 +308,7 @@ public struct IslandRootView: View {
                     // Identity keyed to the activity, so paging between
                     // siblings is a real swap rather than an in-place teleport.
                     .id(activity.id)
-                    .transition(Self.panelTransition)
+                    .transition(panelTransition)
                 }
                 Spacer(minLength: 0)
             }
@@ -255,15 +318,30 @@ public struct IslandRootView: View {
     /// Shape leads, content follows: panel content blurs in one beat behind
     /// the island's growth, and on close it clears quickly so the shrinking
     /// shape never crops live text.
-    private static var panelTransition: some Transition {
-        AsymmetricTransition(
-            // A whisker behind the shape, not a beat — the original 80ms
-            // stagger read as the panel arriving in two pieces.
-            insertion: BlurReplaceTransition(configuration: .downUp)
-                .combined(with: OffsetTransition(CGSize(width: 0, height: -10)))
-                .animation(IslandMotion.content.delay(0.03)),
-            removal: BlurReplaceTransition(configuration: .downUp)
-                .animation(.smooth(duration: 0.14))
+    ///
+    /// Under Reduce Motion the offset goes — that 10pt slide is the movement
+    /// the setting is asking about — but the fade and its stagger stay, because
+    /// content appearing instantly inside a still-growing shape reads as a
+    /// glitch rather than as calm.
+    private var panelTransition: AnyTransition {
+        if access.reduceMotion {
+            return AnyTransition(
+                AsymmetricTransition(
+                    insertion: OpacityTransition().animation(IslandMotion.content.delay(0.03)),
+                    removal: OpacityTransition().animation(.easeOut(duration: 0.12))
+                )
+            )
+        }
+        return AnyTransition(
+            AsymmetricTransition(
+                // A whisker behind the shape, not a beat — the original 80ms
+                // stagger read as the panel arriving in two pieces.
+                insertion: BlurReplaceTransition(configuration: .downUp)
+                    .combined(with: OffsetTransition(CGSize(width: 0, height: -10)))
+                    .animation(IslandMotion.content.delay(0.03)),
+                removal: BlurReplaceTransition(configuration: .downUp)
+                    .animation(.smooth(duration: 0.14))
+            )
         )
     }
 

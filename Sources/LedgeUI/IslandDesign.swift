@@ -84,17 +84,38 @@ public enum IslandDesign {
 
     // MARK: Colour
 
+    /// The ink ramp, measured against the island's true-black surface.
+    ///
+    /// These were tuned by eye and two of them failed: detail labels sat at
+    /// roughly 3.9:1 (WCAG asks 4.5:1 for text this size) and the inactive page
+    /// dots — which are a *control*, not decoration — at about 1.8:1 against a
+    /// 3:1 floor for interface components. The values below clear both, and
+    /// Increase Contrast pushes every step further still.
+    ///
+    /// Computed rather than stored so the setting takes effect live. Reading
+    /// one inside a SwiftUI `body` also registers the observation, so the panel
+    /// re-renders when the user changes it in System Settings.
     public enum Ink {
+        private static var boost: Double { IslandAccessibility.prefersIncreasedContrast ? 1 : 0 }
+
+        /// Interpolates toward full white by the Increase Contrast boost.
+        private static func ink(_ base: Double, contrast: Double) -> Color {
+            Color.white.opacity(base + (contrast - base) * boost)
+        }
+
         public static let primary = Color.white
-        public static let secondary = Color.white.opacity(0.66)
-        public static let tertiary = Color.white.opacity(0.42)
+        public static var secondary: Color { ink(0.66, contrast: 0.86) }
+        /// 0.55 ≈ 6.2:1 on black, up from 0.42 ≈ 3.9:1.
+        public static var tertiary: Color { ink(0.55, contrast: 0.80) }
         /// Structural marks quieter than tertiary text — inactive page dots,
-        /// the pre-glass button border.
-        public static let quaternary = Color.white.opacity(0.22)
-        public static let separator = Color.white.opacity(0.07)
-        public static let controlFill = Color.white.opacity(0.11)
-        public static let controlStroke = Color.white.opacity(0.09)
-        public static let trackFill = Color.white.opacity(0.11)
+        /// the pre-glass button border. 0.36 ≈ 3.1:1, up from 0.22 ≈ 1.8:1:
+        /// these dots are the panel's only navigation control and have to meet
+        /// the component floor, not the decoration one.
+        public static var quaternary: Color { ink(0.36, contrast: 0.62) }
+        public static var separator: Color { ink(0.07, contrast: 0.22) }
+        public static var controlFill: Color { ink(0.11, contrast: 0.20) }
+        public static var controlStroke: Color { ink(0.09, contrast: 0.34) }
+        public static var trackFill: Color { ink(0.11, contrast: 0.22) }
     }
 
     /// The app accent as a SwiftUI color, for the few places outside an
@@ -113,6 +134,18 @@ public enum IslandDesign {
 }
 
 // MARK: - Modifiers
+
+private extension View {
+    /// Brightness that is genuinely absent when it isn't wanted.
+    ///
+    /// The distinction matters: a filter modifier with a neutral value still
+    /// forces an offscreen render pass, which is enough to break a Liquid Glass
+    /// background underneath it.
+    @ViewBuilder
+    func brightness(ifHovering apply: Bool, by amount: Double) -> some View {
+        if apply { brightness(amount) } else { self }
+    }
+}
 
 public extension View {
     /// Layered shadow.
@@ -213,6 +246,34 @@ public struct IslandButtonStyle: ButtonStyle {
         self.kind = kind
     }
 
+    /// Hover feedback, in every theme rather than in one.
+    ///
+    /// Only `.glass` acknowledged the pointer, because `.interactive()` glass
+    /// brings its own shimmer; the other eight themes' buttons sat inert under
+    /// the cursor and read as labels until you clicked one. A `ButtonStyle`
+    /// can't hold `@State`, so the body goes through this wrapper.
+    ///
+    /// Deliberately quiet — a small lift in opacity and a hair of scale. These
+    /// controls live on a panel that opens under the pointer; anything louder
+    /// would fire every time the panel appeared.
+    private struct Hoverable<Content: View>: View {
+        var isPressed: Bool
+        @ViewBuilder var content: (Bool) -> Content
+        @State private var isHovering = false
+
+        var body: some View {
+            content(isHovering)
+                .onHover { hovering in
+                    withAnimation(IslandMotion.content) { isHovering = hovering }
+                }
+                .scaleEffect(isPressed ? 0.95 : (isHovering ? 1.02 : 1))
+                .animation(
+                    isPressed ? IslandMotion.pressIn : IslandMotion.pressRelease,
+                    value: isPressed
+                )
+        }
+    }
+
     @ViewBuilder
     public func makeBody(configuration: Configuration) -> some View {
         if kind == .command {
@@ -235,19 +296,48 @@ public struct IslandButtonStyle: ButtonStyle {
                 value: configuration.isPressed
             )
         } else {
-            configuration.label
-                .font(IslandDesign.Text.button)
-                .foregroundStyle(labelColor)
-                .padding(.horizontal, kind == .plain ? 0 : 13)
-                .padding(.vertical, kind == .plain ? 2 : 7)
-                .background { background }
-                .overlay { border }
-                .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            Hoverable(isPressed: configuration.isPressed) { isHovering in
+                let label = configuration.label
+                    .font(IslandDesign.Text.button)
+                    .foregroundStyle(labelColor)
+                    .padding(.horizontal, kind == .plain ? 0 : 13)
+                    .padding(.vertical, kind == .plain ? 2 : 7)
+
+                Group {
+                    if kind == .glass, #available(macOS 26.0, *) {
+                        // Glass goes ON the label, not behind it.
+                        //
+                        // This used to be `.background { Color.clear.glassEffect(…) }`
+                        // with `.glassEffectID` applied to the whole button.
+                        // `glassEffectID` marks a view that *has* a glass
+                        // effect; tagging a button whose glass lives in a
+                        // detached background layer made the container treat
+                        // the button's own rendering as glass geometry and lens
+                        // it — so "Choose Modules" and "Got It" rendered as
+                        // unreadable smears, in the app's default theme, on the
+                        // one panel a new user is guaranteed to see.
+                        //
+                        // Applied directly, the material draws behind the label
+                        // and the text stays crisp, which is the documented
+                        // shape and also the obvious one.
+                        label.glassEffect(
+                            .regular
+                                .tint(isDestructive ? Color.red.opacity(0.35) : .clear)
+                                .interactive(),
+                            in: .capsule
+                        )
+                    } else {
+                        label
+                            .background { background }
+                            .overlay { border }
+                            // Only attached when it does something: `.brightness`
+                            // is a filter, and an always-present one costs an
+                            // offscreen pass for a no-op.
+                            .brightness(ifHovering: isHovering, by: 0.09)
+                    }
+                }
                 .opacity(configuration.isPressed ? 0.75 : 1)
-                .animation(
-                    configuration.isPressed ? IslandMotion.pressIn : IslandMotion.pressRelease,
-                    value: configuration.isPressed
-                )
+            }
         }
     }
 
@@ -275,17 +365,9 @@ public struct IslandButtonStyle: ButtonStyle {
             Capsule(style: .continuous)
                 .fill(isDestructive ? Color.red.opacity(0.18) : IslandDesign.Ink.controlFill)
         case .glass:
-            // Real Liquid Glass where the system has it — glass is what you
-            // touch; ink is what you read. `.interactive()` brings the
-            // hover/press shimmer.
-            if #available(macOS 26.0, *) {
-                Color.clear.glassEffect(
-                    .regular.tint(isDestructive ? Color.red.opacity(0.35) : .clear).interactive(),
-                    in: .capsule
-                )
-            } else {
-                Capsule(style: .continuous).fill(Color.white.opacity(0.14))
-            }
+            // On macOS 26 the glass is applied to the label itself in
+            // `makeBody` — see the note there. This is the pre-26 fallback.
+            Capsule(style: .continuous).fill(Color.white.opacity(0.14))
         case .accent:
             // WinUI AccentButton: a squared accent fill; corners are circular
             // arcs, not superellipses.
@@ -332,13 +414,9 @@ public struct IslandButtonStyle: ButtonStyle {
                     lineWidth: 0.75
                 )
         case .glass:
-            // Real glass supplies its own edge; a manual stroke would double it.
-            if #available(macOS 26.0, *) {
-                Color.clear
-            } else {
-                Capsule(style: .continuous)
-                    .strokeBorder(IslandDesign.Ink.quaternary, lineWidth: 0.75)
-            }
+            // Real glass supplies its own edge and never reaches here on 26+.
+            Capsule(style: .continuous)
+                .strokeBorder(IslandDesign.Ink.quaternary, lineWidth: 0.75)
         case .accent:
             // WinUI's ControlElevationBorder: the 1px stroke IS the elevation.
             RoundedRectangle(cornerRadius: 5, style: .circular)

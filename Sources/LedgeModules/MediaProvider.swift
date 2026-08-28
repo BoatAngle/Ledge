@@ -278,6 +278,12 @@ public final class MediaProvider: SystemProvider {
             let path = FileManager.default.temporaryDirectory
                 .appendingPathComponent("ledge-artwork-\(abs(key.hashValue)).png").path
             guard (try? data.write(to: URL(fileURLWithPath: path))) != nil else { return }
+            // Sweep the one it replaces. `hashValue` is seeded per process, so
+            // these never collide across launches — left alone, a listening
+            // session quietly fills the temp directory with one file per track.
+            if let stale = self.artworkPath, stale != path {
+                try? FileManager.default.removeItem(atPath: stale)
+            }
             self.artworkPath = path
             if let current = self.current, current.trackKey == key {
                 self.store?.update(id: self.identifier, content: self.content(for: current))

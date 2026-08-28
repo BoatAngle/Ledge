@@ -8,7 +8,7 @@ real time.
 
 ```bash
 make run     # compile + assemble Ledge.app + relaunch
-make test    # 84+ tests across Core, UI, and Modules
+make test    # 118 tests across Core, UI, and Modules
 make app     # bundle only
 make stop    # pkill
 ```
@@ -106,6 +106,85 @@ Deliberate, and worth preserving:
   clear these flags — a settings reset must not resurrect the nag.
 - No Full Disk Access. Downloads are read from the partial files in
   `~/Downloads`, not from Safari's container.
+
+## Ownership: what the socket may and may not do
+
+The socket is 0600 in a 0700 directory, so this is not a boundary against
+another *user*. It is a boundary against every process running as you, which on
+a Mac is a much larger set than the programs you would knowingly hand the island
+to. Four rules, all enforced in `ActivityServer.handle` and
+`Activity.sanitizedForExternalClient()`:
+
+- **No client may claim a `module`.** It drives per-module appearance *and*
+  marks an activity as system-owned, which exempts it from clears.
+- **No client may claim a `nativeView`.** Those select purpose-built renderers.
+  The privacy dot in particular is the one mark on the island that must never
+  lie.
+- **Client priority is clamped below `.system`**, so nothing can bury a privacy
+  indicator or a volume HUD.
+- **External `openURL`s are limited to http/https/mailto** (`Activity
+  .externallyOpenableSchemes`). Everything else goes to LaunchServices, which is
+  the same trust level as clicking a link anywhere — but `file:` is not:
+  `file:///Applications/Utilities/Terminal.app` is a URL, and "click to see your
+  download" is a plausible enough label that someone would. Enforce at INGEST
+  only: built-in modules legitimately open `file:` (reveal in Finder) and go
+  through `store.present` directly, so a blanket guard in `IslandRootView.open`
+  would break them.
+
+`present`, `update`, and `end` all refuse an id a module currently owns. The one
+exception is a timer id, which `end` routes to `TimerProvider.cancel` — because
+there, removing the activity IS meant to be destructive.
+
+**A missing activity never means "cancelled".** `TimerProvider.tick` used to
+delete any timer whose activity had vanished, which made `ledge end-all`, the
+"Clear the Notch" shortcut, and any tidy-up script silently destroy a running
+alarm. It re-presents instead; the island is the timer's face, not the timer.
+`endAll` spares module-owned activities unless asked (`--include-modules`).
+`PrivacyProvider.poll` republishes when it finds its activity gone, for the same
+reason — its `state == lastState` short-circuit is a real optimisation that also
+made the indicator removable.
+
+## Accessibility
+
+`IslandAccessibility` observes the four display preferences and mirrors two of
+them out to places SwiftUI observation can't reach — `IslandMotion
+.prefersReducedMotion` and `IslandAccessibility.prefersIncreasedContrast` —
+because animations are consumed from AppKit callbacks and `ButtonStyle.makeBody`,
+and `IslandDesign.Ink` is a nonisolated enum. `IslandRootView` reads the
+*observable* properties in `body` so the mirrors' changes still redraw.
+
+- **Reduce Motion is not "no animation".** Every curve collapses to a short flat
+  fade; an instant cut is its own kind of jarring. The goo peak goes to zero,
+  the arrival bounce flattens, and the two `TimelineView(.animation)` loops
+  (`BreathingDot`, `WaveformView`) stop asking for frames.
+- **The island can never take focus** — it is a nonactivating panel — so
+  VoiceOver users get `announce()` on arrival rather than a focusable element.
+  `lastArrivalID` is ongoing-only, which is exactly right: volume and brightness
+  HUDs mirror changes VoiceOver already speaks.
+- `ActivityContent.spokenSummary` builds the sentence, in Core, with tests. It
+  de-duplicates, and it will not repeat a percentage the title already contains.
+- **Ink was failing WCAG.** tertiary was 0.42 (~3.9:1 on black, text wants
+  4.5:1) and quaternary 0.22 (~1.8:1, and the page dots are a *control*, which
+  wants 3:1). Now 0.55 and 0.36. Don't lower them.
+- Colour alone never carries state: camera+mic renders as two dots, not a
+  different-coloured one.
+
+## Two Liquid Glass traps
+
+Both cost real time, both look like something else:
+
+1. **`.brightness(0)` is not free.** It is a filter, so attaching it at all
+   forces an offscreen pass. That was the first (wrong) suspect for the smeared
+   buttons; it is still worth avoiding, hence `brightness(ifHovering:by:)`.
+2. **`glassEffectID` must go on the view that HAS the glass.** The action
+   buttons put glass in `.background { Color.clear.glassEffect(…) }` and tagged
+   the *button*, so `GlassEffectContainer` treated the button's own rendering as
+   glass geometry and lensed it — "Choose Modules" rendered as an unreadable
+   smear, in the default theme, on the panel every new user sees. Apply
+   `.glassEffect` to the padded label directly and the text stays crisp.
+
+Neither was visible in any unit test. Both were found by taking a screenshot and
+looking at it.
 
 ## Private API
 
@@ -355,6 +434,14 @@ Rules that keep it behaving like an object rather than a screenshot:
   island content speaks Ledge (glyph chips, island previews).
 - The customization sheet pins its island preview *outside* the scrolling
   Form, so the thing being tuned never scrolls away.
+
+**Opening the window has to be insistent.** `NSApp.activate()` is cooperative
+on macOS 14+: the frontmost app can decline, and a background agent that has
+just promoted itself from `.accessory` to `.regular` is exactly the case the
+system is most sceptical of. When it declines, `makeKeyAndOrderFront` puts the
+window behind everything and `ledge settings` looks like it did nothing —
+reproducibly, on a busy desktop. `show()` therefore ends with
+`orderFrontRegardless()`.
 
 `ledge settings --tab <name>` and `--customize <module-id>` are real features
 and also the only practical way to screenshot these surfaces. A useful side
