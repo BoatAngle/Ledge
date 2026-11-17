@@ -159,6 +159,8 @@ struct GeneralSettings: View {
             }
 
             Section {
+                Toggle("Hide the island while an app is full screen", isOn: $settings.hideInFullScreen)
+
                 Toggle(
                     "Show an island on displays without a notch",
                     isOn: $settings.showOnNotchlessDisplays
@@ -166,7 +168,18 @@ struct GeneralSettings: View {
             } header: {
                 Text("Displays")
             } footer: {
-                SettingsFooter("Applies to external displays and Macs without a camera housing, where the island is drawn rather than hugging real hardware.")
+                SettingsFooter(
+                    """
+                    The island draws above full-screen windows, so without the \
+                    first option a finished download can put a lit panel across \
+                    the top of a film. Activities keep running while it is \
+                    hidden — leaving full screen shows you what you missed.
+
+                    The second applies to external displays and Macs without a \
+                    camera housing, where the island is drawn rather than \
+                    hugging real hardware.
+                    """
+                )
             }
 
             Section {

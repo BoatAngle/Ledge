@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.1
+
+### Fixed
+- **The island no longer draws over a full-screen video.** It sits above
+  full-screen windows by design — that is what makes it read as hardware — so a
+  download finishing put a lit panel across the top of a film with no way to
+  dismiss it. It now stands down entirely while a full-screen app owns its
+  display, and comes back when you leave.
+
+  The work underneath is untouched: timers keep counting, downloads keep
+  tracking, and leaving full screen shows what you missed rather than a gap.
+  There is a switch for it in Settings › General › Displays, on by default.
+
+  The guard that was supposed to do this already existed and was dead code. It
+  tested whether the menu bar had given up its strip (`visibleFrame`), which —
+  measured, not assumed — is simply **not true inside a full-screen Space**. The
+  replacement reads the window list: a full-screen app takes its own Space, and
+  in that Space the Finder wallpaper and Dock windows vanish. Bounds alone can
+  never work, because on a notched Mac a full-screen window and a merely
+  maximized one have byte-identical frames.
+
 ## 0.3.0
 
 The trust-and-correctness release. A five-lens audit of the whole app found

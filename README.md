@@ -269,6 +269,22 @@ And three you will never see:
 - **No microphone or camera access.** The privacy module asks the *hardware* whether someone else is using them; it never opens them.
 - **No Full Disk Access.** Downloads are tracked through the partial files browsers leave in `~/Downloads`, not by reading Safari's container.
 
+## Full screen
+
+The island draws above full-screen windows, which is what makes it feel like
+part of the machine rather than part of an app — and what would make it
+unbearable over a film. So it stands down: while a full-screen app owns its
+display, the island shows nothing and stops taking clicks and drops entirely.
+
+What it is tracking keeps running underneath. A timer still counts, a download
+still tracks, and leaving full screen shows you the current truth instead of a
+gap. There is a switch in Settings › General › Displays if you would rather it
+stayed.
+
+A merely maximized window is not full screen and does not trigger this, which
+turns out to be the hard part: on a notched Mac both have exactly the same
+window frame.
+
 ## Accessibility
 
 The island is a non-activating panel that can never take focus, so it tells

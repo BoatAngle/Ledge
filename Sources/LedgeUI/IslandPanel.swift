@@ -54,6 +54,16 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     /// controller; an idle island must be completely click-transparent.
     var isIdle: () -> Bool = { true }
 
+    /// Whether the island has stood down for the environment — today, a
+    /// full-screen app on its display.
+    ///
+    /// Distinct from `isIdle`, and the difference is the point: an IDLE island
+    /// is still a discoverable drop target, with extra slop so a dragged file
+    /// can find the notch. A SUPPRESSED one is not there at all. Without this
+    /// the top of a full-screen film would quietly swallow a drag aimed at the
+    /// window underneath it.
+    var isSuppressed: () -> Bool = { false }
+
     /// Extra slack around the island so the cursor registers a hover just
     /// before it touches the edge. HOVER ONLY — clicks are tested against the
     /// exact footprint, because every point of click slack is a menu bar item
@@ -110,6 +120,7 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     }
 
     private func dragIsOverIsland(_ sender: any NSDraggingInfo) -> Bool {
+        guard !isSuppressed() else { return false }
         // When idle the visible target is just the notch, so the slop is
         // fatter — a drop target has to be hittable to be discoverable.
         let slack = isIdle() ? 24 : dragSlop
@@ -125,6 +136,8 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
+        // Nothing drawn, nothing touchable.
+        guard !isSuppressed() else { return nil }
         let event = NSApp.currentEvent
         let isButtonEvent: Bool
         switch event?.type {
@@ -240,6 +253,7 @@ public final class IslandWindowController {
         observeScreenChanges()
         observeDisplayPreference()
         observePanelState()
+        observeFullScreen()
     }
 
     public func hide() {
@@ -248,6 +262,8 @@ public final class IslandWindowController {
         panel = nil
         hostingView = nil
         setOutsideClickMonitor(active: false)
+        fullScreen.onChange = nil
+        fullScreen.stop()
         for observer in notificationObservers {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -329,6 +345,7 @@ public final class IslandWindowController {
             view.shelf = shelf
             view.fallbackFootprint = metrics.notchSize
             view.isIdle = { [weak store] in store?.composition.isIdle ?? true }
+            view.isSuppressed = { [weak store] in store?.isSuppressed ?? false }
             view.registerForDraggedTypes([.fileURL])
             panel.contentView = view
             hostingView = view
@@ -367,6 +384,30 @@ public final class IslandWindowController {
         })
     }
 
+    private let fullScreen = FullScreenWatcher.shared
+
+    /// Stand the island down while a full-screen app owns its display.
+    ///
+    /// The suppression is applied to the STORE rather than to the views: one
+    /// place decides what appears, so the compact strip, the panel, the shelf
+    /// and the window's own click-through region all agree without four
+    /// separate checks that could drift apart.
+    private func observeFullScreen() {
+        fullScreen.onChange = { [weak self] _ in
+            MainActor.assumeIsolated { self?.applySuppression() }
+        }
+        fullScreen.start()
+        applySuppression()
+    }
+
+    private func applySuppression() {
+        store.isSuppressed = settings.hideInFullScreen && fullScreen.isActive
+        // The backstop poll exists for apps that fake full screen without
+        // taking a Space. It is only worth running while the island actually
+        // has something it would otherwise be drawing.
+        fullScreen.setPolling(!store.activities.isEmpty)
+    }
+
     /// React to the notchless-display preference the moment it is flipped.
     ///
     /// The Settings footer used to promise this took effect "the next time
@@ -379,7 +420,10 @@ public final class IslandWindowController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.rebuild() }
+            MainActor.assumeIsolated {
+                self?.rebuild()
+                self?.applySuppression()
+            }
         })
     }
 
@@ -422,10 +466,14 @@ public final class IslandWindowController {
     private func observePanelState() {
         withObservationTracking {
             _ = store.isExpanded
+            // Tracked so the full-screen backstop poll can start and stop with
+            // the island having anything to show.
+            _ = store.activities.isEmpty
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
                 self.setOutsideClickMonitor(active: self.store.isExpanded)
+                self.applySuppression()
                 self.observePanelState()
             }
         }

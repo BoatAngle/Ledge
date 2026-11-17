@@ -102,6 +102,19 @@ public final class LedgeSettings {
         }
     }
 
+    /// Stand down entirely while a full-screen app owns the island's display.
+    ///
+    /// On by default. The island draws above full-screen windows — that is what
+    /// makes it read as hardware — so without this a download finishing puts a
+    /// lit panel across the top of a film, with no way to dismiss it.
+    public var hideInFullScreen: Bool {
+        didSet {
+            defaults.set(hideInFullScreen, forKey: Keys.hideInFullScreen)
+            guard hideInFullScreen != oldValue else { return }
+            NotificationCenter.default.post(name: .ledgeDisplayPreferenceChanged, object: nil)
+        }
+    }
+
     /// Play the small bounce when an activity arrives.
     public var animateArrivals: Bool {
         didSet { defaults.set(animateArrivals, forKey: Keys.animateArrivals) }
@@ -204,6 +217,7 @@ public final class LedgeSettings {
         hoverDelay = (storedDelay == nil || storedDelay == 220) ? 400 : storedDelay!
         showOnNotchlessDisplays = defaults.object(forKey: Keys.showOnNotchless) as? Bool ?? true
         animateArrivals = defaults.object(forKey: Keys.animateArrivals) as? Bool ?? true
+        hideInFullScreen = defaults.object(forKey: Keys.hideInFullScreen) as? Bool ?? true
         theme = (defaults.string(forKey: Keys.theme)
             .flatMap(IslandThemeID.init(rawValue:))) ?? .glass
 
@@ -356,6 +370,7 @@ public final class LedgeSettings {
         hoverDelay = 400
         showOnNotchlessDisplays = true
         animateArrivals = true
+        hideInFullScreen = true
         theme = .glass
         weatherMode = .onDemand
         temperatureUnit = .localeDefault
@@ -374,6 +389,7 @@ public final class LedgeSettings {
         static let hoverDelay = "interaction.hoverDelay"
         static let showOnNotchless = "interaction.showOnNotchlessDisplays"
         static let animateArrivals = "interaction.animateArrivals"
+        static let hideInFullScreen = "interaction.hideInFullScreen"
         static let theme = "island.theme"
         static let weatherMode = "weather.mode"
         static let temperatureUnit = "weather.temperatureUnit"
@@ -405,7 +421,7 @@ public final class LedgeSettings {
         /// asked to be introduced to the app again, or to be re-prompted for
         /// Calendar access they already declined.
         static let all = [
-            expandOnHover, hoverDelay, showOnNotchless, animateArrivals,
+            expandOnHover, hoverDelay, showOnNotchless, animateArrivals, hideInFullScreen,
             theme, weatherMode, temperatureUnit, weatherLocationMode,
             manualLatitude, manualLongitude, manualPlaceName, weatherAlerts,
             checksForUpdates, lastUpdateCheck, availableUpdate,

@@ -22,6 +22,20 @@ public final class ActivityStore {
         didSet { if focusedActivityID != oldValue, !isRecomposing { recompose() } }
     }
 
+    /// When true the island presents nothing at all, whatever is live.
+    ///
+    /// Set by the app layer from the screen's actual state — today that means
+    /// "a full-screen app owns the island's display". Activities keep running
+    /// underneath: timers still fire, downloads still track, the privacy
+    /// indicator still knows. Only the *presentation* stands down, so leaving
+    /// full screen brings back the truth rather than a gap.
+    ///
+    /// It lives here, rather than in the renderer, because of the rule this
+    /// file exists to enforce: one place decides what appears.
+    public var isSuppressed: Bool = false {
+        didSet { if isSuppressed != oldValue, !isRecomposing { recompose() } }
+    }
+
     /// Guards the two `didSet` hooks above while a pass is already running.
     ///
     /// `recompose` can decide the panel has to close — the activity it was
@@ -186,9 +200,13 @@ public final class ActivityStore {
                 return lhs.updatedAt > rhs.updatedAt
             }
 
-        guard let primary = live.first else {
+        // Suppressed takes precedence over everything, including an open
+        // panel: going full screen while the panel is down has to put it away,
+        // not leave it hanging over the film.
+        guard !isSuppressed, let primary = live.first else {
             composition = .idle
             if isExpanded { isExpanded = false }
+            if focusedActivityID != nil { focusedActivityID = nil }
             return
         }
 

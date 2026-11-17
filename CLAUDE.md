@@ -8,7 +8,7 @@ real time.
 
 ```bash
 make run     # compile + assemble Ledge.app + relaunch
-make test    # 118 tests across Core, UI, and Modules
+make test    # 124 tests across Core, UI, and Modules
 make app     # bundle only
 make stop    # pkill
 ```
@@ -143,6 +143,56 @@ alarm. It re-presents instead; the island is the timer's face, not the timer.
 `PrivacyProvider.poll` republishes when it finds its activity gone, for the same
 reason — its `state == lastState` short-circuit is a real optimisation that also
 made the indicator removable.
+
+## Standing down in full screen
+
+The island sits at `CGShieldingWindowLevel()`, above full-screen windows. That
+is what makes it read as hardware, and it is also why it will happily put a lit
+panel across the top of a film. `ActivityStore.isSuppressed` turns the whole
+presentation off; the app layer sets it from `FullScreenWatcher`.
+
+**Detecting full screen is harder than it looks, and the obvious test is dead
+code.** The guard that used to live in `IslandRootView` read
+
+```swift
+screen.frame.maxY - screen.visibleFrame.maxY < 1   // "the menu bar gave up its strip"
+```
+
+and never once fired: measured inside a full-screen Space, `visibleFrame` is
+**unchanged** — the menu bar still reports its 39pt. Do not reach for it again.
+
+What actually works needs two signals together, because either alone is wrong:
+
+1. **An ordinary (layer 0) window spanning the screen.** Necessary, not
+   sufficient. On a notched Mac a full-screen window does *not* cover the camera
+   housing by default: measured at `(0, 39, 2056, 1290)` — byte-identical to a
+   window merely zoomed with the green button. Bounds can never separate them.
+2. **No desktop backing on that screen.** A full-screen app gets its own Space,
+   and in that Space the Finder wallpaper window and the Dock's screen-sized
+   window are simply absent from `CGWindowListCopyWindowInfo`. On any normal
+   desktop, zoomed or not, both are there. *That absence is what "full screen"
+   actually means.* Matched by bundle id (`com.apple.finder` / `com.apple.dock`)
+   via `ownerPID`, not by owner name.
+
+Requiring (1) as well as (2) means a Finder that has crashed or is relaunching
+cannot blank the island on its own.
+
+No permissions needed: `CGWindowListCopyWindowInfo` redacts window *titles*
+without Screen Recording, but bounds, layer and owner come back regardless, and
+titles are never consulted. Verified against all four states — windowed,
+maximized, full screen, and back.
+
+Detection is event-driven (`activeSpaceDidChangeNotification` is the one that
+matters; entering full screen always changes Space) with a 2s backstop poll for
+apps that fake full screen with a borderless window. The poll runs **only while
+`store.activities` is non-empty** — an idle Mac pays nothing.
+
+Suppression hides the presentation and nothing else: timers keep counting,
+downloads keep tracking, and leaving full screen shows what you missed rather
+than a gap. It also outranks `.critical` and closes an open panel. The hosting
+view takes a separate `isSuppressed` closure so the window is *inert*, not just
+invisible — an idle island is still a discoverable drop target with extra slop,
+and a suppressed one must not quietly swallow a drag aimed at the film.
 
 ## Accessibility
 

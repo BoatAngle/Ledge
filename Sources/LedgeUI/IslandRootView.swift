@@ -397,8 +397,12 @@ public struct IslandRootView: View {
     /// permanently lose hover-expand and keep click-to-expand — a fair trade
     /// for never opening a panel over a film.
     private static var hostScreenIsFullScreen: Bool {
-        guard let screen = NSScreen.islandHost else { return false }
-        return screen.frame.maxY - screen.visibleFrame.maxY < 1
+        // Was `screen.frame.maxY - screen.visibleFrame.maxY < 1` — the obvious
+        // test, and a dead one: inside a full-screen Space the menu bar has NOT
+        // given up its strip, so `visibleFrame` is unchanged and this never
+        // returned true. Measured, not assumed. `FullScreenWatcher` works out
+        // what the window list actually says.
+        FullScreenWatcher.shared.isActive
     }
 
     /// The dwell only runs while the pointer is RESTING. A pointer in transit
